@@ -142,7 +142,7 @@ mbnma <- suppressWarnings(mb.run(network.gout, fun="emax",
 summary(mbnma)
 
 ## ---- eval=FALSE---------------------------------------------------------
-#  "alpha + (beta.1*time) * ((time/24)^beta.2)"
+#  ~ alpha + (beta.1*time) * ((time/24)^beta.2)
 
 ## ---- eval=FALSE---------------------------------------------------------
 #  # Run an MBNMA that accounts for correlation between time points using AR1 covariance structure
