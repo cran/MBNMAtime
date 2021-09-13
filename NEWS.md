@@ -1,3 +1,24 @@
+# MBNMAtime 0.2.1
+
+## Additions/changes
+- `get.relative()` function can be used to calculate relative effects/mean differences between treatments/classes
+- `cumrank()` added for cumulative ranking plots. Also calculates SUCRA values for each treatment and time-course parameter
+at specified follow-up times (even those at which treatments have not been compared within any study)
+- Studies reporting change from baseline or absolute means can now be specified in `mb.network()`, or
+will be automatically inferred from the data (studies with no time=0 are assumed to report change
+from baseline)
+- Model intercept (response at time=0) is now conditional on change from baseline *for each study*
+- `texp()` now implements 2-parameter exponential function (though the simpler 1-parameter model remains the default)
+
+## Bug fixes
+
+### Major
+- Error with `predict()` not properly incorporating absolute time-course parameters fixed
+
+### Minor
+- Error with `model.file` input length fixed for `mb.run()`
+
+
 # MBNMAtime 0.2.0
 
 ## Additions/changes

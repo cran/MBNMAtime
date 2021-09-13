@@ -168,6 +168,11 @@ mbnma <- mb.run(network.alog,
 
 plot(mbnma)
 
+## -----------------------------------------------------------------------------
+allres <- get.relative(mbnma, time=20,
+                       treats = c("alog_100", "alog_50", "placebo"))
+print(allres)
+
 ## ---- include=FALSE, eval=rmarkdown::pandoc_available("1.12.3")---------------
 load(system.file("extdata", "ranks.rda", package="MBNMAtime", mustWork = TRUE))
 
@@ -195,6 +200,10 @@ print(ranks)
 ## ---- eval=rmarkdown::pandoc_available("1.12.3")------------------------------
 # Ranking histograms for AUC
 plot(ranks, params = "auc")
+
+## ---- eval=rmarkdown::pandoc_available("1.12.3")------------------------------
+# Cumulative ranking for all ranked parameters
+cumrank(ranks)
 
 ## ---- results="hide", message=FALSE, eval=FALSE-------------------------------
 #  # Run an Emax time-course MBNMA using the osteoarthritis dataset
@@ -329,7 +338,7 @@ print("Deviance for uyme on beta.2: -118.04")
 
 ## ---- include=FALSE-----------------------------------------------------------
 load(system.file("extdata", "nodesplit.rda", package="MBNMAtime", mustWork = TRUE))
-load(system.file("extdata", "nd.exp.rda", package="MBNMAtime", mustWork = TRUE))
+load(system.file("extdata", "ns.exp.rda", package="MBNMAtime", mustWork = TRUE))
 
 ## ---- eval=FALSE, echo=TRUE---------------------------------------------------
 #  # Nodesplit using an Emax MBNMA
@@ -353,13 +362,13 @@ plot(nodesplit, plot.type="forest")
 plot(nodesplit, plot.type="density")
 
 ## ---- eval=FALSE, echo=TRUE---------------------------------------------------
-#  # Nodesplit on rate using an exponential MBNMA
+#  # Nodesplit on emax of 1-parameter exponential MBNMA
 #  ns.exp <- mb.nodesplit(network.pain,
-#                         fun=texp(pool.rate = "rel", method.rate="common"),
+#                         fun=texp(pool.emax = "rel", method.emax="common"),
 #                         nodesplit.parameters="all")
 
 ## ---- echo=FALSE, eval=FALSE, include=FALSE-----------------------------------
-#  save(ns.exp, file="inst/extdata/nd.exp.rda")
+#  save(ns.exp, file="inst/extdata/ns.exp.rda")
 
 ## ---- fig.height=2.5----------------------------------------------------------
 print(ns.exp)

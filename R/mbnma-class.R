@@ -13,7 +13,7 @@
 #' @inheritParams plot.mb.predict
 #' @inheritParams stats::integrate
 #' @param params A character vector containing any model parameters monitored
-#'   in `mbnma` for which ranking is desired (e.g. `"beta.1"`, `"d.emax"`).
+#'   in `mbnma` for which ranking is desired (e.g. `"beta.1"`, `"emax"`).
 #'   Parameters must vary by treatment for ranking to be possible. Can include
 #'   `"auc"` (see details).
 #' @param treats A character vector of treatment/class names (depending on the value of `level`) or
@@ -162,15 +162,33 @@ rank.mbnma <- function(x, params="auc", lower_better=FALSE, treats=NULL,
       }))
       colnames(rank.mat) <- treats
 
+      # Ranking probabilityes
+      prob.mat <- calcprob(rank.mat, treats=treats)
+
+      # Calculate cumulative ranking probabilities
+      cum.mat <- apply(prob.mat, MARGIN=2,
+                       FUN=function(col) {cumsum(col)})
+
       rank.result[[params[i]]] <-
         list("summary"=sumrank(rank.mat),
-             "prob.matrix"=calcprob(rank.mat, treats=treats),
-             "rank.matrix"=rank.mat)
+             "prob.matrix"=prob.mat,
+             "rank.matrix"=rank.mat,
+             "cum.matrix"=cum.mat,
+             "lower_better"=lower_better
+             )
 
     } else if (params[i]=="auc") {
-      rank.result[["auc"]] <- rankauc(x, lower_better=lower_better,
-                                      treats=treats, level=level,
-                                      int.range=int.range, n.iter=n.iter, ...)
+
+      auc <- rankauc(x, lower_better=lower_better,
+                     treats=treats, level=level,
+                     int.range=int.range, n.iter=n.iter, ...)
+
+      # Calculate cumulative ranking probs for aux
+      auc[["cum.matrix"]] <- apply(auc$prob.matrix, MARGIN=2,
+                                   FUN=function(col) {cumsum(col)})
+      auc[["lower_better"]] <- lower_better
+
+      rank.result[["auc"]] <- auc
     } else {
       stop(paste0(params[i],
                   " is not a valid paramter saved from the MBNMA model"))
@@ -375,8 +393,7 @@ predict.mbnma <- function(object, times=seq(0, max(object$model.arg$jagsdata$tim
     stop(crayon::red(crayon::bold("UME model cannot be used for prediction")))
   }
 
-  # Check ref.resp has been specified correctly if any mbnma parameters are "rel"
-  #if (check.betas(object)==TRUE) {
+  # Check ref.resp has been specified correctly
   if ("rel" %in% object$model.arg$fun$apool) {
     if (is.null(ref.resp)) {
 
@@ -386,6 +403,12 @@ predict.mbnma <- function(object, times=seq(0, max(object$model.arg$jagsdata$tim
       for (i in seq_along(rels)) {
         ref.resp[[rels[i]]] <- 0
       }
+
+      # # If ref.resp is not given then assign mbnma MCMC value to all abs time-course parameters
+      # abs <- names(object$model.arg$fun$apool)[object$model.arg$fun$apool %in% "abs"]
+      # for (i in seq_along(abs)) {
+      #   ref.resp[[abs[i]]] <- mbnma$BUGSoutput$sims.list[[abs[i]]]
+      # }
     } else {
 
       # If ref.resp is given ensure it is of the correct class
@@ -395,8 +418,6 @@ predict.mbnma <- function(object, times=seq(0, max(object$model.arg$jagsdata$tim
       or estimated from a dataset of reference treatment studies by providing a data frame.")))
       }
     }
-  } else if (!"rel" %in% object$model.arg$fun$apool) {
-    ref.resp <- NULL
   }
 
 
@@ -480,14 +501,21 @@ predict.mbnma <- function(object, times=seq(0, max(object$model.arg$jagsdata$tim
       # Assign ref.resp to mu values in model
       for (i in seq_along(ref.resp)) {
 
-        if (class(ref.resp[[i]])=="formula") {
-          ref.resp[[i]] <- as.character(ref.resp[[i]])[2]
-          if (grepl("r[A-z]+\\(n,.+\\)", ref.resp[[i]])==FALSE) {
-            stop(crayon::red("Stochastic distribution for ref.resp must be expressed as a formula in the form of a supported R distribution (e.g. ~rnorm(n, 5,2))"))
+        if (class(ref.resp[[i]]) %in% c("formula", "character")) {
+
+          if (class(ref.resp[[i]]) %in% "formula") {
+            ref.resp[[i]] <- as.character(ref.resp[[i]])[2]
+            if (grepl("r[A-z]+\\(n,.+\\)", ref.resp[[i]])==FALSE) {
+              stop(crayon::red("Stochastic distribution for ref.resp must be expressed as a formula in the form of a supported R distribution (e.g. ~rnorm(n, 5,2))"))
+            }
           }
+          assign(mu.params[which(names(ref.resp)[i]==mu.params)],
+                 eval(parse(text=ref.resp[[i]])))
+
+        } else if (class(ref.resp[[i]]) %in% "numeric") {
+          assign(mu.params[which(names(ref.resp)[i]==mu.params)],
+                 rep(ref.resp[[i]], n))
         }
-        assign(mu.params[which(names(ref.resp)[i]==mu.params)],
-               eval(parse(text=ref.resp[[i]])))
       }
     } else if (any(class(ref.resp) %in% c("data.frame", "tibble"))) {
 
@@ -797,4 +825,134 @@ plot.mbnma <- function(x, params=NULL, treat.labs=NULL, class.labs=NULL, ...) {
 
   graphics::plot(g)
   return(invisible(g))
+}
+
+
+
+
+
+
+
+#' Calculates relative effects/mean differences at a particular time-point
+#'
+#' Uses mbnma time-course parameter estimates to calculate treatment
+#' differences between treatments or classes at a particular time-point.
+#' Can be used to compare treatments evaluated in studies at different follow-up times.
+#'
+#' @param time A numeric value for the time at which to estimate relative effects/mean differences.
+#' @param treats A character vector of treatment names for which to calculate relative effects/mean differences.
+#' Must be a subset of `mbnma$network$treatments`
+#' @param classes A character vector of class names for which to calculate relative effects/mean differences from.
+#' Must be a subset of `mbnma$network$classes`. Only works for class effect models.
+#' @inheritParams predict.mbnma
+#' @inheritParams fitplot
+#'
+#' @return An object of class `"relative.array"` list containing:
+#' * The time-point for which results are estimated
+#' * Matrices of posterior means, medians, SDs and upper and lower 95% credible intervals for the
+#' differences between each treatment
+#' * An array containing MCMC results for the differences between all treatments specified in `treats`
+#' or all classes specified in `classes`.
+#'
+#' Results are reported in tables as the row-defined treatment minus the column-defined treatment.
+#'
+#' @examples
+#' \donttest{
+#' # Create an mb.network object from a dataset
+#' alognet <- mb.network(alog_pcfb)
+#'
+#' # Run a quadratic time-course MBNMA using the alogliptin dataset
+#' mbnma <- mb.run(alognet,
+#'   fun=tpoly(degree=2,
+#'   pool.1="rel", method.1="random",
+#'   pool.2="rel", method.2="common"
+#'   )
+#' )
+#'
+#' # Calculate differences between all treatments at 20 weeks follow-up
+#' allres <- get.relative(mbnma, time=20)
+#'
+#' # Calculate difference between a subset of treatments at 10 weeks follow-up
+#' subres <- get.relative(mbnma, time=10,
+#'   treats=c("alog_50", "alog_25", "placebo"))
+#' }
+#' @export
+get.relative <- function(mbnma, time=max(mbnma$model.arg$jagsdata$time, na.rm=TRUE),
+                         treats=mbnma$network$treatments, classes=NULL) {
+
+  # Run checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertNumeric(time, lower=0, len=1, null.ok=FALSE, add=argcheck)
+  checkmate::assertSubset(treats, choices=mbnma$network$treatments, add=argcheck)
+  checkmate::assertSubset(classes, choices=mbnma$network$classes, add=argcheck)
+  checkmate::reportAssertions(argcheck)
+
+  if (!is.null(classes)) {
+    treats <- classes
+    level <- "class"
+  } else {
+    level <- "treatment"
+  }
+
+  pred <- suppressMessages(predict.mbnma(mbnma, times=time,
+                        treats = treats, level = level))
+
+
+  # Matrix of results
+  mat <- do.call(cbind, pred$pred.mat)
+
+  # For lower triangle
+  outmat <- array(dim=c(length(treats), length(treats), nrow(mat)))
+  for (i in 1:(ncol(mat)-1)) {
+    temp <- mat[,-i] - mat[,i]
+    #temp <- apply(temp, MARGIN=2, FUN=function(x) {neatCrI(quantile(x, probs=c(0.025, 0.5, 0.975)), digits = 2)})
+    outmat[(1+i):dim(outmat)[1],i,] <- t(temp[,i:ncol(temp)])
+  }
+
+  # For upper triangle
+  for (i in 1:(ncol(mat)-1)) {
+    temp <- mat[,i] - mat[,-i]
+    outmat[i,(1+i):dim(outmat)[2],] <- t(temp[,i:ncol(temp)])
+  }
+
+  dimnames(outmat)[[1]] <- treats
+  dimnames(outmat)[[2]] <- treats
+
+
+
+  ######### Summary matrixes ######
+
+  xmat <- outmat
+
+  meanmat <- matrix(nrow=nrow(xmat), ncol=ncol(xmat))
+  semat <- meanmat
+  medmat <- meanmat
+  l95mat <- medmat
+  u95mat <- medmat
+
+  for (i in 1:nrow(xmat)) {
+    for (k in 1:ncol(xmat)) {
+      if (!is.na(xmat[i,k,1])) {
+        meanmat[i,k] <- mean(xmat[i,k,])
+        semat[i,k] <- stats::sd(xmat[i,k,])
+        medmat[i,k] <- stats::median(xmat[i,k,])
+        l95mat[i,k] <- stats::quantile(xmat[i,k,], probs = 0.025)
+        u95mat[i,k] <- stats::quantile(xmat[i,k,], probs = 0.975)
+      }
+    }
+  }
+
+  sumlist <- list("mean"=meanmat, "se"=semat, "median"=medmat, "lower95"=l95mat, "upper95"=u95mat)
+
+  for (i in seq_along(sumlist)) {
+    dimnames(sumlist[[i]])[[1]] <- dimnames(xmat)[[1]]
+    dimnames(sumlist[[i]])[[2]] <- dimnames(xmat)[[2]]
+  }
+
+  out <- list("time"=time, "relarray"=outmat)
+  out <- c(out, sumlist)
+
+  class(out) <- "relative.array"
+
+  return(out)
 }

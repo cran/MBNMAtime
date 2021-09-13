@@ -6,10 +6,20 @@
 
 #' Exponential time-course function
 #'
-#' \eqn{rate\times{(1-exp(-x))}}
+#' Similar parameterisation to the Emax model but with non-asymptotic maximal effect (Emax). Can fit
+#' a 1-parameter (Emax only) or 2-parameter (includes onset parameter) model
 #'
-#' @param pool.rate Pooling for exponential rate parameter. Can take `"rel"` or `"abs"` (see details).
-#' @param method.rate Method for synthesis of exponential rate parameter. Can take `"common` or `"random"` (see Time-course parameters section).
+#' 1-parameter model:
+#' \eqn{emax\times{(1-exp(-x))}}
+#'
+#' 2-parameter model:
+#' \eqn{emax\times{(1-exp(exp(onset)*-x))}}
+#'
+#' @param pool.emax Pooling for exponential Emax parameter. Can take `"rel"` or `"abs"` (see details).
+#' @param method.emax Method for synthesis of exponential Emax parameter. Can take `"common` or `"random"` (see Time-course parameters section).
+#' @param pool.onset Pooling for parameter controlling speed of onset. Default is `NULL` which avoids including
+#' this parameter (i.e. fixes it to 1 for all treatments). Can take `"rel"` or `"abs"` (see details).
+#' @param method.onset Method for synthesis of parameter controlling speed of onset. Can take `"common` or `"random"` (see Time-course parameters section).
 #'
 #' @return An object of `class("timefun")`
 #'
@@ -39,42 +49,67 @@
 #'   \insertAllCited
 #'
 #' @examples
-#' texp(pool.rate="rel", method.rate="random")
-#' texp(pool.rate="abs")
+#' texp(pool.emax="rel", method.emax="random")
+#' texp(pool.emax="abs")
 #'
 #' @export
-texp <- function(pool.rate="rel", method.rate="common") {
+texp <- function(pool.emax="rel", method.emax="common",
+                 pool.onset=NULL, method.onset=NULL) {
 
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
-  checkmate::assertChoice(pool.rate, choices=c("rel", "abs"), add=argcheck)
-  checkmate::assertChoice(method.rate, choices=c("common", "random"), add=argcheck)
+  checkmate::assertChoice(pool.emax, choices=c("rel", "abs"), add=argcheck)
+  checkmate::assertChoice(method.emax, choices=c("common", "random"), add=argcheck)
+  checkmate::assertChoice(pool.onset, choices=c("rel", "abs"), null.ok = TRUE, add=argcheck)
+  checkmate::assertChoice(method.onset, choices=c("common", "random"), null.ok = TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   # Define time-course function
-  fun <- ~ rate * (1 - exp(-time))
-  latex <- "\beta_1 * (1 - exp(-x_m))"
-  jags <- "beta.1 * (1 - exp(- time[i,m]))"
-
-  if (pool.rate=="rel") {
-    jags <- gsub("beta\\.1", "beta.1[i,k]", jags)
-  } else if (pool.rate=="abs" & method.rate=="random") {
-    jags <- gsub("beta\\.1", "i.beta.1[i,k]", jags)
+  if (!is.null(pool.onset)) {
+    fun <- ~ emax * (1 - exp(exp(onset)*-time))
+    latex <- "\beta_1 * (1 - exp(exp(\beta_2)*-x_m))"
+    jags <- "beta.1 * (1 - exp(exp(beta.2)*- time[i,m]))"
+  } else {
+    fun <- ~ emax * (1 - exp(-time))
+    latex <- "\beta_1 * (1 - exp(-x_m))"
+    jags <- "beta.1 * (1 - exp(- time[i,m]))"
   }
 
-  f <- function(time, beta.1) {
-    y <- beta.1 * (1-exp(-time))
+
+  if (pool.emax=="rel") {
+    jags <- gsub("beta\\.1", "beta.1[i,k]", jags)
+  } else if (pool.emax=="abs" & method.emax=="random") {
+    jags <- gsub("beta\\.1", "i.beta.1[i,k]", jags)
+  }
+  if ("rel" %in% pool.onset) {
+    jags <- gsub("beta\\.2", "beta.2[i,k]", jags)
+  } else if ("abs" %in% pool.onset & "random" %in% method.onset) {
+    jags <- gsub("beta\\.2", "i.beta.2[i,k]", jags)
+  }
+
+  f <- function(time, beta.1, beta.2) {
+    y <- beta.1 * (1-exp(exp(beta.2)*-time))
     return(y)
   }
 
-  # Generate output values
-  paramnames <- "rate"
-  nparam <- 1
 
-  apool <- pool.rate
+  # Generate output values
+  paramnames <- "emax"
+  if (!is.null(pool.onset)) {
+    paramnames <- append(paramnames, "onset")
+  }
+  nparam <- length(paramnames)
+
+  apool <- pool.emax
+  amethod <- method.emax
+
+  if (!is.null(pool.onset)) {
+    apool <- append(apool, pool.onset)
+    amethod <- append(amethod, method.onset)
+  }
   names(apool) <- paramnames
-  amethod <- method.rate
   names(amethod) <- paramnames
+
   bname <- paste0("beta.", 1:nparam)
   names(bname) <- paramnames
 
@@ -102,7 +137,8 @@ texp <- function(pool.rate="rel", method.rate="common") {
 #'
 #' \eqn{rate\times{log(x + 1)}}
 #'
-#' @inheritParams texp
+#' @param pool.rate Pooling for rate parameter. Can take `"rel"` or `"abs"` (see details).
+#' @param method.rate Method for synthesis of rate parameter. Can take `"common"` or `"random"` (see Time-course parameters section)
 #'
 #' @return An object of `class("timefun")`
 #'
@@ -270,7 +306,7 @@ temax <- function(pool.emax="rel", method.emax="common", pool.et50="rel", method
     ehill <- FALSE
   } else {
     ehill <- TRUE
-    pool.hill <- "abs"
+    #pool.hill <- "abs"
   }
 
   if (ehill) {

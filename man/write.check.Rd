@@ -7,7 +7,7 @@
 write.check(
   fun = tpoly(degree = 1),
   positive.scale = TRUE,
-  intercept = TRUE,
+  intercept = NULL,
   rho = 0,
   covar = NULL,
   omega = NULL,
@@ -24,10 +24,10 @@ write.check(
 mean responses (y) are positive and therefore whether the baseline response
 should be given a prior that constrains it to be positive (e.g. for scales that cannot be <0).}
 
-\item{intercept}{A boolean object that indicates whether an intercept is to
-be included in the model. Can be used to imply whether mean responses in
-data are change from baseline (\code{FALSE}) or not (setting it to \code{FALSE}
-removes the intercept, \code{alpha}, from the model).}
+\item{intercept}{A boolean object that indicates whether an intercept (written
+as \code{alpha} in the model) is to be included. If left as \code{NULL} (the default), an intercept will
+be included only for studies reporting absolute means, and will be excluded for
+studies reporting change from baseline (as indicated in \code{network$cfb}).}
 
 \item{rho}{The correlation coefficient when modelling within-study correlation between time points. The default is a string representing a
 prior distribution in JAGS, indicating that it be estimated from the data (e.g. \code{rho="dunif(0,1)"}). \code{rho} also be assigned a
@@ -40,9 +40,9 @@ be done by specifying one of the following:
 \item \code{"varadj"} - a univariate likelihood with a variance adjustment to assume a constant correlation between subsequent
 time points \insertCite{jansen2015}{MBNMAtime}. This is the default.
 \item \code{"CS"} - a multivariate normal likelihood with a
-\href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{compound symmetry} structure
+\href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{compound symmetry} structure
 \item \code{"AR1"} - a multivariate normal likelihood with an
-\href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{autoregressive AR1} structure
+\href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 }}
 
 \item{omega}{A scale matrix for the inverse-Wishart prior for the covariance matrix used

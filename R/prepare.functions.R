@@ -21,6 +21,10 @@
 #' @param reference A number or character (depending on the format of `treatment` within `data.ab`)
 #' indicating the reference treatment in the network (i.e. those for which estimated relative treatment
 #' effects estimated by the model will be compared to).
+#' @param cfb A logical vector whose length is equal to the unique number of studies in `data.ab`, where each
+#' element is `TRUE` if the study data reported is change-from-baseline and `FALSE` otherwise. If left as `NULL`
+#' (the default) then this will be identified from the data by assuming any study for which there is no data
+#' at `time=0` reports change-from-baseline.
 #' @param description Optional. Short description of the network.
 #'
 #' @details Missing values (`NA`) cannot be included in the dataset. Studies must have a baseline
@@ -32,6 +36,8 @@
 #' * `description` A short description of the network
 #' * `data.ab` A data frame containing the arm-level network data (treatment identifiers will have
 #' been recoded to a sequential numeric code)
+#' * `studyID` A character vector with the IDs of included studies.
+#' * `cfb` A logical vector indicating which studies report change from baseline data
 #' * `treatments` A character vector indicating the treatment identifiers that correspond to the
 #' new treatment codes.
 #' * `classes` A character vector indicating the class identifiers (if included in the original data)
@@ -56,7 +62,7 @@
 #' plot(network)
 #'
 #' @export
-mb.network <- function(data.ab, reference=1, description="Network") {
+mb.network <- function(data.ab, reference=1, cfb=NULL, description="Network") {
 
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
@@ -68,10 +74,19 @@ mb.network <- function(data.ab, reference=1, description="Network") {
 
   index.data <- add_index(data.ab=data.ab, reference=reference)
 
-  network <- index.data
-  network <- c(list("description" = description), network)
+  # Assert cfb is reported correctly
+  checkmate::assertLogical(cfb, len=length(unique(data.ab$studyID)), null.ok = TRUE)
+  if (is.null(cfb)) {
+    message("Studies reporting change from baseline automatically identified from the data")
+    cfb.df <- index.data$data.ab %>% subset(arm==1 & fupcount==1) %>%
+      dplyr::mutate(cfb=dplyr::case_when(time==0 ~ FALSE,
+                                         time!=0 ~ TRUE))
+    cfb <- cfb.df$cfb
+  }
 
-  #mb.validate.network(network) # need to write a script to validate MBNMA network...should include sorting
+  network <- append(index.data, list("cfb"=cfb), after=2)
+
+  network <- c(list("description" = description), network)
 
   class(network) <- "mb.network"
   return(network)
@@ -238,6 +253,11 @@ add_index <- function(data.ab, reference=1) {
     dplyr::mutate(narm=dplyr::n())
 
 
+  outlist <- list("data.ab"=data.ab,
+                  "studyID"=as.character(unique(data.ab$studyID)),
+                  "treatments"=orderlist
+                  )
+
   # Store class labels and recode (if they exist in data.ab)
   if ("class" %in% names(data.ab)) {
     # Create class labels
@@ -253,11 +273,12 @@ add_index <- function(data.ab, reference=1) {
     classkey$treatment <- factor(classkey$treatment, labels=orderlist)
     classkey$class <- factor(classkey$class, labels=classes)
 
-    return(list("data.ab"=data.ab, "treatments"=orderlist, "classes"=classes, "classkey"=classkey))
+    outlist$classes <- classes
+    outlist$classkey <- classkey
 
-  } else {
-    return(list("data.ab"=data.ab, "treatments"=orderlist))
   }
+
+  return(outlist)
 }
 
 
@@ -315,7 +336,7 @@ add_index <- function(data.ab, reference=1) {
 #' jagsdat <- getjagsdata(painnet$data.ab, rho="dunif(0,1)", covstruct="AR1")
 #'
 #' @export
-getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS", link="identity") {
+getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS", link="identity", cfb=NULL) {
 
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
@@ -323,6 +344,7 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
   checkmate::assertLogical(class, len=1, null.ok=FALSE, add=argcheck)
   checkmate::assertChoice(covstruct, choices=c("varadj", "CS", "AR1"), null.ok=TRUE, add=argcheck)
   checkmate::assertClass(fun, "timefun", null.ok=TRUE, add=argcheck)
+  checkmate::assertLogical(cfb, len=length(unique(data.ab$studyID)), null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   df <- data.ab
@@ -358,7 +380,11 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
   # Prepare df
   df <- dplyr::arrange(df, dplyr::desc(narm), dplyr::desc(fups), studyID, arm, time)
 
-  df$studynam <- df$studyID
+  if (is.factor(df$studyID)) {
+    df$studynam <- as.character(df$studyID)
+  } else {
+    df$studynam <- df$studyID
+  }
   df <- transform(df,studyID=as.numeric(factor(studyID, levels=as.character(unique(df$studyID)))))
 
 
@@ -502,25 +528,16 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
     }
   }
 
-  # mat.triangle <- vector()
-  # p <- 1
-  # for (i in 2:max(datalist$fups)) {
-  #   mat.triangle[datalist$fups==i] <- p
-  #   p <- p+i
-  # }
-  #
-  #
-  # mat.order <- array(dim=c(max(datalist$fups), max(datalist$fups), datalist$NS))
-  # for (i in 1:datalist$NS) {
-  #   p <- 1
-  #   for (c in 1:(datalist$fups[i]-1)) {
-  #     for (r in (c+1):datalist$fups[i]) {
-  #       mat.order[r,c,i] <- p
-  #       mat.order[c,r,i] <- p
-  #       p <- p+1
-  #     }
-  #   }
-  # }
+  # Add data for intercept
+  if (!is.null(cfb)) {
+    if (length(unique(cfb))>1) {
+
+      cfbid <- unique(data.ab$studyID)
+      newid <- unique(df$studynam)
+
+      datalist[["intercept"]] <- !cfb[match(newid, cfbid)]
+    }
+  }
 
   return(datalist)
 
@@ -950,7 +967,6 @@ mb.validate.data <- function(data.ab, single.arm=FALSE, CFB=TRUE) {
   # Checks that studies have more than one arm if single.arm==FALSE
 
   varnames <- c("studyID", "time", "y", "se", "treatment")
-  data.ab <- dplyr::arrange(data.ab, studyID, time, treatment)
 
   # Check data.ab has required column names
   msg <- "Required variable names are: 'studyID', 'time', `treatment`, 'y' and `se`"
@@ -965,6 +981,7 @@ mb.validate.data <- function(data.ab, single.arm=FALSE, CFB=TRUE) {
     stop(msg)
   }
 
+  data.ab <- dplyr::arrange(data.ab, studyID, time, treatment)
 
   # Check data.ab has required column names
   if (all(varnames %in% names(data.ab))==FALSE) {
@@ -1323,3 +1340,6 @@ getnmadata <- function(data.ab, link="identity") {
   return(datalist)
 
 }
+
+
+

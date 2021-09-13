@@ -41,8 +41,8 @@
 #'     pool.2="rel", method.2="common"))
 #'
 #' @export
-mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE, intercept=TRUE,
-                     rho=0, covar="varadj", omega=NULL,
+mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE, intercept=NULL,
+                     rho=0, covar="varadj", omega=NULL, corparam=TRUE,
                      class.effect=list(), UME=FALSE) {
 
 
@@ -51,9 +51,10 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
   checkmate::assertClass(fun, classes = "timefun", add=argcheck)
   checkmate::assertChoice(link, choices=c("identity", "log", "smd"), add=argcheck)
   checkmate::assertLogical(positive.scale, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
-  checkmate::assertLogical(intercept, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
+  checkmate::assertLogical(intercept, len=1, null.ok=TRUE, any.missing=FALSE, add=argcheck)
   checkmate::assertChoice(covar, choices=c("varadj", "CS", "AR1"), null.ok=FALSE, add=argcheck)
   checkmate::assertList(class.effect, unique=FALSE, add=argcheck)
+  checkmate::assertLogical(corparam, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
 
@@ -87,8 +88,9 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
                       UME=UME, class.effect=class.effect)
 
 
-
-  model <- write.cor(model=model, fun=fun, omega=omega, class.effect = class.effect)
+  if (corparam==TRUE) {
+    model <- write.cor(model=model, fun=fun, omega=omega, class.effect = class.effect)
+  }
 
   model <- add.funparams(model=model, fun=fun)
 
@@ -114,7 +116,7 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
 #'   will return an object that indicates whether the arguments imply modelling a
 #'   correlation between time points if it passes.
 #'
-write.check <- function(fun=tpoly(degree=1), positive.scale=TRUE, intercept=TRUE, rho=0, covar=NULL,
+write.check <- function(fun=tpoly(degree=1), positive.scale=TRUE, intercept=NULL, rho=0, covar=NULL,
                         omega=NULL, link="identity",
                         class.effect=list(), UME=c()) {
 
@@ -259,15 +261,26 @@ write.timecourse <- function(model, fun,
                         intercept, positive.scale) {
 
   timecourse <- fun$jags
-  if (intercept==TRUE) {
+  if (!is.null(intercept)) {
+    if (intercept==TRUE) {
 
+      # Insert prior for alpha
+      model <- model.insert(model, pos=which(names(model)=="study"), "alpha[i] ~ dnorm(0,0.0001)")
+
+      if (positive.scale==TRUE) {
+        timecourse <- paste0("exp(alpha[i]) + ", timecourse)
+      } else {
+        timecourse <- paste0("alpha[i] + ", timecourse)
+      }
+    }
+  } else if (is.null(intercept)) {
     # Insert prior for alpha
     model <- model.insert(model, pos=which(names(model)=="study"), "alpha[i] ~ dnorm(0,0.0001)")
 
     if (positive.scale==TRUE) {
-      timecourse <- paste0("exp(alpha[i]) + ", timecourse)
+      timecourse <- paste0("exp(ifelse(intercept[i]==1, alpha[i], 0)) + ", timecourse)
     } else {
-      timecourse <- paste0("alpha[i] + ", timecourse)
+      timecourse <- paste0("ifelse(intercept[i]==1, alpha[i], 0) + ", timecourse)
     }
   }
 
@@ -527,7 +540,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert sd.D prior
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.D.", i, " ~ dnorm(0,0.0025) T(0,)"),
+                                x=c(paste0("sd.D.", i, " ~ dnorm(0,0.05) T(0,)"),
                                   paste0("tau.D.", i, " <- pow(sd.D.", i, ", -2)")
                                   )
                                 )
@@ -556,7 +569,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert prior for heterogeneity
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.0025) T(0,)"),
+                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)"),
                                   paste0("tau.", i, " <- pow(sd.beta.", i, ", -2)"))
                                 )
         }
@@ -579,7 +592,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert prior for heterogeneity
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.0025) T(0,)"),
+                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)"),
                                   paste0("tau.", i, " <- pow(sd.beta.", i, ", -2)"))
           )
 
@@ -609,7 +622,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
           # Insert sd prior for random absolute effect
           model <- model.insert(model, pos=which(names(model)=="end"),
                                 x=c(paste0("prec.beta.", i, " <- pow(sd.beta.", i, ", -2)"),
-                                  paste0("sd.beta.", i, " ~ dnorm(0,0.0025) T(0,)")
+                                  paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)")
                                 )
           )
         }
@@ -860,7 +873,7 @@ get.prior <- function(model) {
 #'   time-course MBNMA model.
 #' @param priors A named list of parameter values (without indices) and
 #'   replacement prior distribution values given as strings
-#'   **using distributions as specified in JAGS syntax**.
+#'   **using distributions as specified in JAGS syntax** (see \insertCite{jagsmanual;textual}{MBNMAtime}).
 #'
 #' @details Values in `priors` can include any JAGS functions/distributions
 #'   (e.g. censoring/truncation).
@@ -902,6 +915,10 @@ replace.prior <- function(priors, model=NULL, mbnma=NULL) {
       stop("Prior named ", names(priors)[i], " not found in the model code. Check priors currently present in model code using get.prior()")
       # } else if (length(grep(paste0("^( +)?", names(priors)[i]), model))>1) {
       #   stop("Prior named ", names(priors)[i], " has matched on multiple instances in the model code. Check priors currently present in model code using get.prior()")
+    }
+
+    if (!grepl("^d[a-z.]*\\(", priors[[i]])) {
+      stop("Prior named ", names(priors)[i], " does not follow JAGS distribution syntax\nSee JAGS manual: https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf")
     }
 
     #line <- grep(paste0("^( +)?", names(priors)[i]), model)
@@ -1040,7 +1057,7 @@ write.beta.ref <- function(model, timecourse, fun,
                               x=paste0("i.mu.", i, "[i,k] ~ dnorm(mu.", i, ", tau.mu.", i, ")"))
 
         model <- model.insert(model, pos=which(names(model)=="end"),
-                              x=paste0("sd.mu.", i, " ~ dnorm(0,0.0025) T(0,)"))
+                              x=paste0("sd.mu.", i, " ~ dnorm(0,0.05) T(0,)"))
         model <- model.insert(model, pos=which(names(model)=="end"),
                               x=paste0("tau.mu.", i, " <- pow(sd.mu.", i, ", -2)"))
       }
@@ -1058,7 +1075,7 @@ write.beta.ref <- function(model, timecourse, fun,
         # Insert sd prior for random absolute effect
         model <- model.insert(model, pos=which(names(model)=="end"),
                               x=c(paste0("prec.beta.", i, " <- pow(sd.beta.", i, ", -2)"),
-                                  paste0("sd.beta.", i, " ~ dnorm(0,0.0025) T(0,)")
+                                  paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)")
                               )
         )
       }
@@ -1161,7 +1178,7 @@ write.nma <- function(method="common", link="identity") {
     #Insert at end
     model <- model.insert(model, pos=which(names(model)=="end"),
                           x=c("tau <- pow(sd,-2)",
-                              "sd ~ dnorm(0,0.0025) T(0,)"))
+                              "sd ~ dnorm(0,0.05) T(0,)"))
   }
   model <- model.insert(model, pos=which(names(model)=="te"),
                         x=te.insert)

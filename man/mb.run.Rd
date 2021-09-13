@@ -8,12 +8,13 @@ mb.run(
   network,
   fun = tpoly(degree = 1),
   positive.scale = FALSE,
-  intercept = TRUE,
+  intercept = NULL,
   link = "identity",
   parameters.to.save = NULL,
   rho = 0,
   covar = "varadj",
   omega = NULL,
+  corparam = TRUE,
   class.effect = list(),
   UME = FALSE,
   pd = "pv",
@@ -24,6 +25,7 @@ mb.run(
   n.burnin = floor(n.iter/2),
   n.thin = max(1, floor((n.iter - n.burnin)/1000)),
   model.file = NULL,
+  jagsdata = NULL,
   ...
 )
 }
@@ -37,10 +39,10 @@ mb.run(
 mean responses (y) are positive and therefore whether the baseline response
 should be given a prior that constrains it to be positive (e.g. for scales that cannot be <0).}
 
-\item{intercept}{A boolean object that indicates whether an intercept is to
-be included in the model. Can be used to imply whether mean responses in
-data are change from baseline (\code{FALSE}) or not (setting it to \code{FALSE}
-removes the intercept, \code{alpha}, from the model).}
+\item{intercept}{A boolean object that indicates whether an intercept (written
+as \code{alpha} in the model) is to be included. If left as \code{NULL} (the default), an intercept will
+be included only for studies reporting absolute means, and will be excluded for
+studies reporting change from baseline (as indicated in \code{network$cfb}).}
 
 \item{link}{Can take either \code{"identity"} (the default),
 \code{"log"} (for modelling Ratios of Means \insertCite{friedrich2011}{MBNMAtime}) or
@@ -60,9 +62,9 @@ be done by specifying one of the following:
 \item \code{"varadj"} - a univariate likelihood with a variance adjustment to assume a constant correlation between subsequent
 time points \insertCite{jansen2015}{MBNMAtime}. This is the default.
 \item \code{"CS"} - a multivariate normal likelihood with a
-\href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{compound symmetry} structure
+\href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{compound symmetry} structure
 \item \code{"AR1"} - a multivariate normal likelihood with an
-\href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{autoregressive AR1} structure
+\href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 }}
 
 \item{omega}{A scale matrix for the inverse-Wishart prior for the covariance matrix used
@@ -70,6 +72,10 @@ to model the correlation between time-course parameters (see Details for time-co
 be a symmetric positive definite matrix with dimensions equal to the number of time-course parameters modelled using
 relative effects (\code{pool="rel"}). If left as \code{NULL} (the default) a diagonal matrix with elements equal to 1
 is used.}
+
+\item{corparam}{A boolean object that indicates whether correlation should be modelled
+between relative effect time-course parameters. This is automatically set to \code{FALSE} if class effects are modelled.
+It can also be useful for providing informative priors more easily to the model.}
 
 \item{class.effect}{A list of named strings that determines which time-course
 parameters to model with a class effect and what that effect should be
@@ -99,7 +105,7 @@ cannot be used with models implemented in parallel.}
 
 \item{priors}{A named list of parameter values (without indices) and
 replacement prior distribution values given as strings
-\strong{using distributions as specified in JAGS syntax}.}
+\strong{using distributions as specified in JAGS syntax} (see \insertCite{jagsmanual;textual}{MBNMAtime}).}
 
 \item{n.iter}{number of total iterations per chain (including burn in; default: 20000)}
 
@@ -111,9 +117,14 @@ beginning. Default is \verb{n.iter/2``, that is, discarding the first half of th
 \item{n.thin}{thinning rate. Must be a positive integer. Set \verb{n.thin > 1`` to save memory and computation time if }n.iter\verb{is large. Default is}max(1, floor(n.chains * (n.iter-n.burnin) / 1000))`` which will only thin if there are at least 2000
 simulations.}
 
-\item{model.file}{A JAGS model written as a character object that can be used
+\item{model.file}{The file path to a JAGS model (.jags file) that can be used
 to overwrite the JAGS model that is automatically written based on the
-specified options. Useful when amending priors using replace.prior()}
+specified options in \code{MBNMAtime}. Useful for adding further model flexibility.}
+
+\item{jagsdata}{A named list of the data objects to be used in the JAGS model. Only
+required if users are defining their own JAGS model using \code{model.file}. Format
+should match that of standard models fitted in \code{MBNMAtime}
+(see \code{mbnma$model.arg$jagsdata})}
 
 \item{...}{Arguments to be sent to R2jags.}
 }
@@ -196,6 +207,16 @@ Available time-course functions are:
 
 When modelling correlation between observations using \code{rho}, values for \code{rho} must imply a
 positive semidefinite covariance matrix.
+}
+
+\section{Advanced options}{
+
+\code{model.file} and \code{jagsdata} can be used to run an edited JAGS model and dataset. This allows
+users considerably more modelling flexibility than is possible using the basic \code{MBNMAtime} syntax,
+though requires strong understanding of JAGS and the MBNMA modelling framework. Treatment-specific
+priors, meta-regression and bias-adjustment are all possible in this way, and it allows users to
+make use of the subsequent functions in \code{MBNMAtime} (plotting, prediction, ranking) whilst fitting
+these more complex models.
 }
 
 \examples{

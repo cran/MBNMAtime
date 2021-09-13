@@ -18,10 +18,10 @@
 #' @param positive.scale A boolean object that indicates whether all continuous
 #'   mean responses (y) are positive and therefore whether the baseline response
 #'   should be given a prior that constrains it to be positive (e.g. for scales that cannot be <0).
-#' @param intercept A boolean object that indicates whether an intercept is to
-#'   be included in the model. Can be used to imply whether mean responses in
-#'   data are change from baseline (`FALSE`) or not (setting it to `FALSE`
-#'   removes the intercept, `alpha`, from the model).
+#' @param intercept A boolean object that indicates whether an intercept (written
+#'   as `alpha` in the model) is to be included. If left as `NULL` (the default), an intercept will
+#'   be included only for studies reporting absolute means, and will be excluded for
+#'   studies reporting change from baseline (as indicated in `network$cfb`).
 #' @param link Can take either `"identity"` (the default),
 #'   `"log"` (for modelling Ratios of Means \insertCite{friedrich2011}{MBNMAtime}) or
 #'   `"smd"` (for modelling Standardised Mean Differences - although this also corresponds to an identity link function).
@@ -35,15 +35,18 @@
 #'   * `"varadj"` - a univariate likelihood with a variance adjustment to assume a constant correlation between subsequent
 #'   time points \insertCite{jansen2015}{MBNMAtime}. This is the default.
 #'   * `"CS"` - a multivariate normal likelihood with a
-#'     \href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{compound symmetry} structure
+#'     \href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{compound symmetry} structure
 #'   * `"AR1"` - a multivariate normal likelihood with an
-#'     \href{https://online.stat.psu.edu/stat502/lesson/10/10.3}{autoregressive AR1} structure
+#'     \href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 #'
 #' @param omega A scale matrix for the inverse-Wishart prior for the covariance matrix used
 #' to model the correlation between time-course parameters (see Details for time-course functions). `omega` must
 #' be a symmetric positive definite matrix with dimensions equal to the number of time-course parameters modelled using
 #' relative effects (`pool="rel"`). If left as `NULL` (the default) a diagonal matrix with elements equal to 1
 #' is used.
+#' @param corparam A boolean object that indicates whether correlation should be modelled
+#' between relative effect time-course parameters. This is automatically set to `FALSE` if class effects are modelled.
+#' It can also be useful for providing informative priors more easily to the model.
 #'
 #' @param class.effect A list of named strings that determines which time-course
 #'   parameters to model with a class effect and what that effect should be
@@ -77,9 +80,14 @@
 #' beginning. Default is `n.iter/2``, that is, discarding the first half of the
 #' simulations. If `n.burnin` is 0, jags() will run 100 iterations for adaption.
 #'
-#' @param model.file A JAGS model written as a character object that can be used
+#' @param model.file The file path to a JAGS model (.jags file) that can be used
 #'   to overwrite the JAGS model that is automatically written based on the
-#'   specified options. Useful when amending priors using replace.prior()
+#'   specified options in `MBNMAtime`. Useful for adding further model flexibility.
+#' @param jagsdata A named list of the data objects to be used in the JAGS model. Only
+#'   required if users are defining their own JAGS model using `model.file`. Format
+#'   should match that of standard models fitted in `MBNMAtime`
+#'   (see `mbnma$model.arg$jagsdata`)
+#'
 #' @param ... Arguments to be sent to R2jags.
 #'
 #' @inheritParams replace.prior
@@ -149,6 +157,16 @@
 #' @section Correlation between observations:
 #'   When modelling correlation between observations using `rho`, values for `rho` must imply a
 #'   positive semidefinite covariance matrix.
+#'
+#'
+#' @section Advanced options:
+#'   `model.file` and `jagsdata` can be used to run an edited JAGS model and dataset. This allows
+#'   users considerably more modelling flexibility than is possible using the basic `MBNMAtime` syntax,
+#'   though requires strong understanding of JAGS and the MBNMA modelling framework. Treatment-specific
+#'   priors, meta-regression and bias-adjustment are all possible in this way, and it allows users to
+#'   make use of the subsequent functions in `MBNMAtime` (plotting, prediction, ranking) whilst fitting
+#'   these more complex models.
+#'
 #'
 #' @importFrom Rdpack reprompt
 #' @importFrom magrittr "%>%"
@@ -232,24 +250,24 @@
 #'                  rho="dunif(0,1)", covar="varadj")
 #' }
 #' @export
-mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, intercept=TRUE,
+mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, intercept=NULL,
                       link="identity",
                       parameters.to.save=NULL,
                       rho=0, covar="varadj",
-                      omega=NULL,
+                      omega=NULL, corparam=TRUE,
                       class.effect=list(), UME=FALSE,
                       pd="pv", parallel=FALSE,
                       priors=NULL,
                       n.iter=20000, n.chains=3,
                       n.burnin=floor(n.iter/2), n.thin=max(1, floor((n.iter - n.burnin) / 1000)),
-                      model.file=NULL, ...
+                      model.file=NULL, jagsdata=NULL, ...
 ) {
 
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(fun, classes = "timefun", add=argcheck)
   checkmate::assertClass(network, "mb.network", add=argcheck)
-  checkmate::assertCharacter(model.file, len=1, any.missing=FALSE, null.ok=TRUE, add=argcheck)
+  checkmate::assertCharacter(model.file, any.missing=FALSE, null.ok=TRUE, add=argcheck)
   checkmate::assertChoice(pd, choices=c("pv", "pd.kl", "plugin", "popt"), null.ok=FALSE, add=argcheck)
   checkmate::assertLogical(parallel, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
@@ -260,13 +278,22 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
     n.burnin <- n.burnin - 1
   }
 
+  # Set intercept if cfb is consistent across all trials
+  unicfb <- unique(network$cfb)
+  if (length(unicfb)==1) {
+    if (unicfb==TRUE) {
+      intercept <- FALSE
+    } else if (unicfb==FALSE) {
+      intercept <- TRUE
+    }
+  }
 
   if (is.null(model.file)) {
     model <- mb.write(fun=fun, link=link,
                       positive.scale=positive.scale, intercept=intercept,
                       rho=rho, covar=covar,
                       class.effect=class.effect, UME=UME,
-                      omega=omega
+                      omega=omega, corparam=corparam
     )
 
     if (!is.null(priors)) {
@@ -275,7 +302,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
 
   } else {
     warning("All parameter specifications (time-course, rho, class effects, UME, priors, etc.) are being overwritten by `model.file`")
-    model <- model.file
+    model <- readLines(model.file)
   }
 
   assigned.parameters.to.save <- parameters.to.save
@@ -287,7 +314,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   # If multiple time-course parameters are relative effects then add omega default
   if (is.null(omega)) {
     relparam <- fun$apool %in% "rel" & !names(fun$apool) %in% names(class.effect)
-    if (sum(relparam)>1) {
+    if (sum(relparam)>1 & corparam==TRUE) {
       omega <- diag(rep(1,sum(relparam)))
     }
   }
@@ -316,8 +343,9 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   #### Run jags model ####
 
   data.ab <- network[["data.ab"]]
-  result.jags <- mb.jags(data.ab, model, fun=fun, link=link,
+  result.jags <- mb.jags(data.ab, model, fun=fun, link=link, cfb=network$cfb,
                        class=class, rho=rho, covar=covar, omega=omega,
+                       jagsdata=jagsdata,
                        parameters.to.save=parameters.to.save,
                        n.iter=n.iter, n.chains=n.chains,
                        n.burnin=n.burnin, n.thin=n.thin,
@@ -354,7 +382,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
                     "positive.scale"=positive.scale, "intercept"=intercept,
                     "rho"=rho, "covar"=covar,
                     "class.effect"=class.effect, "UME"=UME,
-                    "omega"=omega,
+                    "omega"=omega, "corparam"=corparam,
                     "parallel"=parallel, "pd"=pd,
                     "priors"=get.prior(model))
   result[["model.arg"]] <- model.arg
@@ -377,7 +405,8 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
 mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
                        class=FALSE, rho=NULL, covar=NULL,
                        parameters.to.save=parameters.to.save,
-                       likelihood=NULL, omega=NULL,
+                       cfb=NULL, omega=NULL,
+                       jagsdata=NULL,
                        warn.rhat=FALSE, ...) {
 
   # Run checks
@@ -388,22 +417,24 @@ mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
   checkmate::assertCharacter(parameters.to.save, any.missing=FALSE, unique=TRUE,
                   null.ok=TRUE, add=argcheck)
   checkmate::assertClass(fun, "timefun", add=argcheck)
+  checkmate::assertLogical(cfb, null.ok=TRUE, add=argcheck)
+  checkmate::assertList(jagsdata, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
 
-  if (is.null(likelihood)) {
+  if (is.null(jagsdata)) {
     # For MBNMAtime
-    jagsdata <- getjagsdata(data.ab, class=class, rho=rho, covstruct=covar, fun=fun, link=link) # get data into jags correct format (list("fups", "NT", "NS", "narm", "y", "se", "treat", "time"))
-  }
+    jagsdata <- getjagsdata(data.ab, class=class, rho=rho, covstruct=covar, fun=fun, link=link, cfb=cfb) # get data into jags correct format (list("fups", "NT", "NS", "narm", "y", "se", "treat", "time"))
 
-  if (!is.null(omega)) {
-    jagsdata[["omega"]] <- omega
-  }
+    if (!is.null(omega)) {
+      jagsdata[["omega"]] <- omega
+    }
 
 
-  # Add variable for maxtime to jagsdata if required
-  if (any(grepl("maxtime", model))) {
-    jagsdata[["maxtime"]] <- max(data.ab$time)
+    # Add variable for maxtime to jagsdata if required
+    if (any(grepl("maxtime", model))) {
+      jagsdata[["maxtime"]] <- max(data.ab$time)
+    }
   }
 
   # Remove studyID from jagsdata (not used in model)
