@@ -4,13 +4,20 @@
 \alias{genspline}
 \title{Generates spline basis matrices for fitting to time-course function}
 \usage{
-genspline(x, spline = "bs", knots = 1, degree = 1, max.time = max(x))
+genspline(
+  x,
+  spline = "bs",
+  knots = 1,
+  degree = 1,
+  max.time = max(x),
+  boundaries = NULL
+)
 }
 \arguments{
 \item{x}{A numeric vector indicating all time points available in the dataset}
 
 \item{spline}{Indicates the type of spline function. Can be either a piecewise linear spline (\code{"ls"}),
-natural cubic spline (\code{"ns"}), restricted cubic spline (\code{"rcs"}) or B-spline (\code{"bs"}).}
+natural cubic spline (\code{"ns"}) or B-spline (\code{"bs"}).}
 
 \item{knots}{The number/location of knots. If a single integer is given it indicates the number of knots (they will
 be equally spaced across the range of time-points). If a numeric vector is given it indicates the quantiles of the knots as
@@ -21,6 +28,10 @@ is 10 months, \code{knots=c(0.1,0.5)} would indicate knots should be fitted at 1
 (e.g. \code{degree=3} represents a cubic spline).}
 
 \item{max.time}{A number indicating the maximum time between which to calculate the spline function.}
+
+\item{boundaries}{A positive numeric vector of length 2 that represents the time-points at which to anchor the B-spline or natural
+cubic spline basis matrix. This allows data to extend beyond the boundary knots, or for the basis parameters to not depend on \code{x}.
+The default (\code{boundaries=NULL})is the range of \code{x}.}
 }
 \value{
 A spline basis matrix with number of rows equal to \code{length(x)} and the number of columns equal to the number
@@ -37,8 +48,8 @@ genspline(x)
 # Generate a quadratic B-spline with 1 equally spaced internal knot
 genspline(x, spline="bs", knots=2, degree=2)
 
-# Generate a restricted cubic spline with 3 knots at selected quantiles
-genspline(x, spline="rcs", knots=c(0.1, 0.5, 0.7))
+# Generate a natural spline with 2 knots at selected quantiles
+genspline(x, spline="ns", knots=c(0.1, 0.5))
 
 # Generate a piecewise linear spline with 3 equally spaced knots
 genspline(x, spline="ls", knots=3)

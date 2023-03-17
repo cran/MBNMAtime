@@ -13,7 +13,7 @@
 #' @param parameters.to.save A character vector containing names of parameters
 #'   to monitor in JAGS
 #' @param fun An object of class `"timefun"` generated (see Details) using any of
-#'   `tloglin()`, `tpoly()`, `texp()`, `temax()`, `tfpoly()`, `tspline()` or `tuser()`
+#'   `tloglin()`, `tpoly()`, `titp()`, `temax()`, `tfpoly()`, `tspline()` or `tuser()`
 #'
 #' @param positive.scale A boolean object that indicates whether all continuous
 #'   mean responses (y) are positive and therefore whether the baseline response
@@ -39,14 +39,18 @@
 #'   * `"AR1"` - a multivariate normal likelihood with an
 #'     \href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 #'
-#' @param omega A scale matrix for the inverse-Wishart prior for the covariance matrix used
+#' @param omega DEPRECATED IN VERSION 0.2.3 ONWARDS (~uniform(-1,1) now used for correlation between parameters
+#' rather than a Wishart prior).
+#' A scale matrix for the inverse-Wishart prior for the covariance matrix used
 #' to model the correlation between time-course parameters (see Details for time-course functions). `omega` must
 #' be a symmetric positive definite matrix with dimensions equal to the number of time-course parameters modelled using
 #' relative effects (`pool="rel"`). If left as `NULL` (the default) a diagonal matrix with elements equal to 1
 #' is used.
-#' @param corparam A boolean object that indicates whether correlation should be modelled
-#' between relative effect time-course parameters. This is automatically set to `FALSE` if class effects are modelled.
-#' It can also be useful for providing informative priors more easily to the model.
+#' @param corparam A boolean object that indicates whether correlation should be modeled
+#' between relative effect time-course parameters. Default is `FALSE` and this is automatically set to `FALSE` if class effects are modeled.
+#' Setting it to `TRUE` models correlation between time-course parameters. This can help identify parameters
+#' that are estimated poorly for some treatments by allowing sharing of information between
+#' parameters for different treatments in the network, but may also cause some shrinkage.
 #'
 #' @param class.effect A list of named strings that determines which time-course
 #'   parameters to model with a class effect and what that effect should be
@@ -147,7 +151,7 @@
 #'   Available time-course functions are:
 #'   * Log-linear: `tloglin()`
 #'   * Polynomial: `tpoly()`
-#'   * Exponential: `texp()`
+#'   * Integrated Two-Component Prediction (ITP): `titp()`
 #'   * Emax: `temax()`
 #'   * Fractional polynomial: `tfpoly()`
 #'   * Splines (various spline types can be used): `tspline()`
@@ -194,7 +198,7 @@
 #' result <- mb.run(network, fun=temax(pool.emax="rel", method.emax="common",
 #'                                     pool.et50="abs", method.et50="common",
 #'                                     pool.hill="abs", method.hill="common"),
-#'                  priors=list(hill="dnorm(0, 0.1)"),
+#'                  priors=list(hill="dunif(0.5, 2)"),
 #'                  intercept=TRUE)
 #'
 #'
@@ -254,7 +258,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
                       link="identity",
                       parameters.to.save=NULL,
                       rho=0, covar="varadj",
-                      omega=NULL, corparam=TRUE,
+                      omega=NULL, corparam=FALSE,
                       class.effect=list(), UME=FALSE,
                       pd="pv", parallel=FALSE,
                       priors=NULL,
@@ -273,20 +277,25 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
+  message("Change from version 0.2.2 onwards: corparam=FALSE as default")
+
   # Reduce n.burnin by 1 to avoid JAGS error if n.burnin=n.iter
   if (n.iter==n.burnin) {
     n.burnin <- n.burnin - 1
   }
 
   # Set intercept if cfb is consistent across all trials
-  unicfb <- unique(network$cfb)
-  if (length(unicfb)==1) {
-    if (unicfb==TRUE) {
-      intercept <- FALSE
-    } else if (unicfb==FALSE) {
-      intercept <- TRUE
+  if (is.null(intercept)) {
+    unicfb <- unique(network$cfb)
+    if (length(unicfb)==1) {
+      if (unicfb==TRUE) {
+        intercept <- FALSE
+      } else if (unicfb==FALSE) {
+        intercept <- TRUE
+      }
     }
   }
+
 
   if (is.null(model.file)) {
     model <- mb.write(fun=fun, link=link,
@@ -311,13 +320,14 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
       gen.parameters.to.save(fun=fun, model=model)
   }
 
+  # Removed in version 0.2.3
   # If multiple time-course parameters are relative effects then add omega default
-  if (is.null(omega)) {
-    relparam <- fun$apool %in% "rel" & !names(fun$apool) %in% names(class.effect)
-    if (sum(relparam)>1 & corparam==TRUE) {
-      omega <- diag(rep(1,sum(relparam)))
-    }
-  }
+  # if (is.null(omega)) {
+  #   relparam <- fun$apool %in% "rel" & !names(fun$apool) %in% names(class.effect)
+  #   if (sum(relparam)>1 & corparam==TRUE) {
+  #     omega <- diag(rep(1,sum(relparam)))
+  #   }
+  # }
 
   # Add nodes to monitor to calculate plugin pd
   if (pd=="plugin") {
@@ -442,7 +452,7 @@ mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
   tempjags[["studyID"]] <- NULL
 
   # Drop time from tempjags in spline models
-  if (fun$name %in% c("rcs", "ns", "bs", "ls") & !"AR1" %in% covar) {
+  if (fun$name %in% c("ns", "bs", "ls") & !"AR1" %in% covar) {
     tempjags[["time"]] <- NULL
   }
 
@@ -491,10 +501,13 @@ mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
 
 
 
-#' Automatically generate parameters to save for a dose-response MBNMA model
+#' Automatically generate parameters to save for a time-course MBNMA model
 #'
 #' @inheritParams mb.run
 #' @param model A JAGS model written as a character object
+#'
+#' @return A character vector of parameter names that should be monitored in the model
+#'
 gen.parameters.to.save <- function(fun, model) {
   # model.params is a vector (numeric/character) of the names of the dose-response parameters in the model
   #e.g. c(1, 2, 3) or c("emax", "et50")
@@ -549,6 +562,9 @@ gen.parameters.to.save <- function(fun, model) {
   if (any(grepl("rho", model))==TRUE) {
     parameters.to.save <- append(parameters.to.save, "rho")
   }
+  if (any(grepl("rhoparam", model))==TRUE) {
+    parameters.to.save <- append(parameters.to.save, "rhoparam")
+  }
   if (any(grepl("totresdev", model))==TRUE) {
     parameters.to.save <- append(parameters.to.save, c("totresdev"))
   }
@@ -595,6 +611,8 @@ gen.parameters.to.save <- function(fun, model) {
 #' * `binomial` (does not work with time-course MBNMA models)
 #' * `multivar.normal` (does not work with time-course MBNMA models)
 #' @param type The type of MBNMA model fitted. Can be either `"time"` or `"dose"`
+#'
+#' @return A numeric value for the effective number of parameters, pD, calculated via the plugin method
 #'
 #' @details Method for calculating pD via the plugin method proposed by
 #'   \insertCite{spiegelhalter2002}{MBNMAtime}. Standard errors / covariance matrices must be assumed
@@ -785,6 +803,9 @@ mb.update <- function(mbnma, param="theta",
 #' # Get the latest time point
 #' df <- get.latest.time(network)
 #'
+#' # Get the closest time point to a given value (t)
+#' df <- get.closest.time(network, t=7)
+#'
 #' # Run NMA on the data
 #' nma.run(df, method="random")
 #'
@@ -835,6 +856,125 @@ nma.run <- function(data.ab, method="common", link="identity", ...) {
   }
   )
   class(out) <- c("nma", "rjags")
+
+  return(out)
+}
+
+
+
+
+
+
+
+#' Run a non-parametric random walk model
+#'
+#' Runs a non-parametric model that splits the data into different time-bins
+#' and models a random walk process between them, following the method
+#' of \insertCite{lu2007;textual}{MBNMAtime}.
+#'
+#' @param binvals A numeric vector defining the boundaries of the time
+#' bins.
+#'
+#' @inheritParams mb.network
+#' @inheritParams mb.run
+#'
+#' @examples
+#' # CURRENTLY COMMENTED OUT AS THE FUNCTION IS NOT EXPORTED
+#'
+#' # Using the alogliptin dataset
+#' #network <- mb.network(alog_pcfb)
+#'
+#' # Specify time bins to use for analysis
+#' #timebins <- c(0,6,12,20,40)
+#'
+#' # Run a common effects non-parametric RW model
+#' #nonparam.run(network, binvals=timebins, method="common")
+#'
+#' @noRd
+nonparam.run <- function(network, class=FALSE, method="common", link="identity",
+                         binvals=bintime(network$data.ab), ...) {
+
+  # Run Checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertLogical(class, add=argcheck)
+  checkmate::assertChoice(method, choices = c("common", "random"), add=argcheck)
+  checkmate::assertChoice(link, choices = c("identity", "smd", "log"), add=argcheck)
+  checkmate::assertClass(network, classes="mb.network", add=argcheck)
+  checkmate::assertNumeric(binvals, lower=0, add=argcheck)
+  checkmate::reportAssertions(argcheck)
+
+  data.ab <- network$data.ab
+
+  binvals <- sort(binvals)
+  if (!identical(unique(binvals), binvals)) {
+    stop("binvals must only include unique values for time bins")
+  }
+  if (binvals[1]!=0) {
+    binvals <- c(0, binvals)
+  }
+  if (max(binvals)<max(data.ab$time)) {
+    binvals <- c(binvals, max(data.ab$time))
+  }
+
+  # Write NMA model for common/random effects
+  model <- write.rw(method=method, link=link)
+
+
+  # Get jags data
+  jagsdata <- getrwdata(data.ab, link=link, class=class, binvals=binvals)
+  tempjags <- jagsdata
+  tempjags[["studyID"]] <- NULL
+  tempjags[["time"]] <- NULL
+
+  parameters.to.save <- c("d", "sd.rw", "totresdev")
+  if (method=="random") {
+    parameters.to.save <- append(parameters.to.save, "sd")
+  }
+
+  # Put data from jagsdata into separate R objects
+  for (i in seq_along(tempjags)) {
+    ##first extract the object value
+    temp <- tempjags[[i]]
+    ##now create a new variable with the original name of the list item
+    eval(parse(text=paste(names(tempjags)[[i]],"<- temp")))
+  }
+
+  # Take names of variables in tempjags for use in rjags
+  jagsvars <- list()
+  for (i in seq_along(names(tempjags))) {
+    jagsvars[[i]] <- names(tempjags)[i]
+  }
+
+  # Create a temporary model file
+  tmpf=tempfile()
+  tmps=file(tmpf,"w")
+  cat(paste(model, collapse="\n"),file=tmps)
+  close(tmps)
+
+  out <- tryCatch({
+    result <- R2jags::jags(data=jagsvars, model.file=tmpf,
+                           parameters.to.save=parameters.to.save,
+                           ...
+    )
+  },
+  error=function(cond) {
+    message(cond)
+    return(list("error"=cond))
+  }
+  )
+
+  model.arg <- list(parameters.to.save=parameters.to.save,
+                    fun="nonparam",
+                    jagscode=model,
+                    link=link,
+                    class.effect=class,
+                    UME=FALSE,
+                    priors=NULL
+                    )
+  out$model.arg <- model.arg
+  out$network <- network
+  out$type <- "time"
+  class(out) <- c("nonparam", "rjags")
 
   return(out)
 }

@@ -41,6 +41,10 @@
 #'   a numeric co-ordinate.
 #' @param ... Options for plotting in `igraph`.
 #'
+#' @return Returns an object of class `"igraph"`, which can be modified by other
+#' functions within the `igraph` package.
+#'
+#'
 #' @details The S3 method `plot()` on an `mb.network` object generates a
 #'   network plot that shows how different treatments are connected within the
 #'   network via study comparisons. This can be used to identify how direct and
@@ -111,14 +115,14 @@ plot.mb.network <- function(x, edge.scale=1, label.distance=0,
 
   # Calculate participant numbers (if v.scale not NULL)
   if (!is.null(v.scale)) {
-    if (!("N" %in% names(df))) {
-      stop("`N` not included as a column in dataset. Vertices/nodes will all be scaled to be the same size.")
+    if (!("n" %in% names(df))) {
+      stop("`n` not included as a column in dataset. Vertices/nodes will all be scaled to be the same size.")
     }
 
     data.early <- x$data.ab[x$data.ab$fupcount==1,]
     size.vec <- vector()
     for (i in seq_along(nodes)) {
-      size.vec <- append(size.vec, sum(data.early$N[data.early[[level]]==i]))
+      size.vec <- append(size.vec, sum(data.early$n[data.early[[level]]==i]))
     }
     # Scale size.vec by the max node.size
     size.vec <- size.vec/ (max(size.vec)/20)
@@ -203,6 +207,8 @@ plot.mb.network <- function(x, edge.scale=1, label.distance=0,
 #' @param x An object of class `mb.network`.
 #' @param ... further arguments passed to or from other methods
 #'
+#' @return Prints the contents of `x` to the console.
+#'
 #' @export
 print.mb.network <- function(x,...) {
   nn <- names(x)
@@ -228,6 +234,8 @@ print.mb.network <- function(x,...) {
 #'
 #' @param object An object of class `mb.network`.
 #' @param ... further arguments passed to or from other methods
+#'
+#' @return Prints summary details of `x` to the console.
 #'
 #' @export
 summary.mb.network <- function(object,...) {

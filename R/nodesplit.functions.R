@@ -12,7 +12,7 @@
 #' @param data A data frame containing variables `studyID` and `treatment` (as
 #'   numeric codes) that indicate which treatments are used in which studies.
 #'
-#' @details Similar to \code{\link[gemtc]{mtc.nodesplit}} but uses a fixed
+#' @details Similar to \code{gemtc::mtc.nodesplit()} but uses a fixed
 #'   reference treatment and therefore suggests fewer loops in which to test for
 #'   inconsistency. Heterogeneity can also be parameterised as inconsistency and
 #'   so testing for inconsistency in additional loops whilst changing the
@@ -122,13 +122,6 @@ inconsistency.loops <- function(data)
 #'   MBNMAtime) `nr` will represent the number of time points in the
 #'   dataset in which treatments `t1` and `t2` are compared.
 #'
-#' @examples
-#' data <- data.frame(studyID=c(1,1,2,2,3,3,4,4,5,5,5),
-#'   treatment=c(1,2,1,3,2,3,3,4,1,2,4)
-#'   )
-#'
-#' # Identify comparisons informed by direct and indirect evidence
-#' MBNMAtime:::ref.comparisons(data)
 ref.comparisons <- function(data)
 {
   # Assert checks
@@ -305,9 +298,15 @@ mb.nodesplit.comparisons <- function(network)
 #' node-split (e.g. c("beta.1", "beta.2")). Can use "all" to split on all time-course parameters.
 #' @param ... Arguments to be sent to `mb.run()`
 #' @inheritParams mb.run
+#' @inheritParams predict.mbnma
 #'
 #' @inherit mb.run details
 #' @inherit inconsistency.loops references
+#'
+#' @details
+#' Note that by specifying the `times` argument a user can perform a node-split of treatment
+#' effects at a specific time-point. This will give the treatment effect for both direct, indirect, and
+#' MBNMA estimates at this time point.
 #'
 #' @return A an object of `class("mb.nodesplit")` that is a list containing elements
 #' `d.X.Y` (treatment 1 = `X`, treatment 2 = `Y`). Each element (corresponding to each
@@ -352,8 +351,9 @@ mb.nodesplit.comparisons <- function(network)
 #' }
 #' @export
 mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
-                            nodesplit.parameters="all", fun=tpoly(degree = 1),
-                            ...
+                         nodesplit.parameters="all", fun=tpoly(degree = 1),
+                         times=NULL, lim="cred",
+                         ...
 )
 {
   # Required packages: overlapping
@@ -405,7 +405,7 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
 
 
   ########### CHECKS OF DATASET FOR VALIDITY OF NODE-SPLITTING (possibly use Val Valkenhoef automation) ############
-  print("running checks")
+  message("running checks")
 
   # Ensure lowest treatment code in t1
   comparisons[["t1"]] <- as.numeric(comparisons[["t1"]])
@@ -416,6 +416,8 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
 
 
   ############# Run NMA model #############
+
+  message("Running NMA model")
 
   result.nma <- do.call(mb.run, args=list(network=network, fun=fun,
                                          ...))
@@ -430,19 +432,29 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
 
     comp <- as.numeric(c(comparisons[["t1"]][row], comparisons[["t2"]][row]))
 
-    print(paste0("Comparison ", row,"/",nrow(comparisons)))
-    print(paste0("Calculating nodesplit for: ", network$treatments[comp[1]], " vs ", network$treatments[comp[2]]))
-    print(paste0("Treatment code: ", comp[1], " vs ", comp[2]))
-
+    message(paste0("Comparison ", row,"/",nrow(comparisons),"\n",
+                   "Calculating nodesplit for: ", network$treatments[comp[1]], " vs ", network$treatments[comp[2]], "\n",
+                   "Treatment code: ", comp[1], " vs ", comp[2]
+                   )
+            )
 
 
     #######################################
     ######### For NMA model  ###########
     #######################################
 
-    print("Running NMA model")
-
     nma.dif <- list()
+
+    if (!is.null(times)) {
+
+      for (time in seq_along(times)) {
+        trtnam.nma <- c(network$treatments[comp[1]], network$treatments[comp[2]])
+        rel.nma <- get.relative(result.nma, time=times[time], lim=lim, treats=trtnam.nma)
+        nma.dif[[paste0("time", times[time])]] <- rel.nma$relarray[2,1,]
+      }
+    }
+
+    # Node-split by time-course parameter
     for (param in seq_along(nodesplit.parameters)) {
       if (grepl("beta", nodesplit.parameters[param])) {
         index <- which(nodesplit.parameters[param] %in% fun$params)
@@ -459,7 +471,6 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
       nma.dif[[nodesplit.parameters[param]]] <- nma2 - nma1
     }
 
-
     #######################################
     ######### For direct model  ###########
     #######################################
@@ -471,7 +482,7 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
       if (network.temp$treatment[1] != network$treatment[comp[1]]) {
         data.temp <- network.temp$data.ab
         data.temp$treatment <- factor(data.temp$treatment, labels=network.temp$treatments)
-        network.temp <- mb.network(data.temp, reference=network$treatment[comp[1]])
+        network.temp <- mb.network(data.temp, reference=network$treatment[comp[1]], cfb=network$cfb)
       }
 
       # Run UME model to estimate direct effects
@@ -482,7 +493,22 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
     # Store required model parameter values
     comp.temp <- which(network$treatments[comp[2]] == network.temp$treatments)
     dir.dif <- list()
+
+    # Node-split at specific time
+    if (!is.null(times)) {
+
+      for (time in seq_along(times)) {
+        trtnam.dir <- c(network.temp$treatments[1], network.temp$treatments[comp.temp])
+        rel <- get.relative(result.dir, time=times[time], lim=lim, treats=trtnam.dir)
+        dir.dif[[paste0("time", times[time])]] <- rel$relarray[2,1,]
+      }
+
+
+    }
+
+    # Node-split by time-course parameter
     for (param in seq_along(nodesplit.parameters)) {
+
       if (grepl("beta", nodesplit.parameters[param])) {
         index <- which(nodesplit.parameters[param] %in% fun$params)
         node <- paste0("d.", index, "[1,", comp.temp, "]")
@@ -494,7 +520,7 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
         result.dir$BUGSoutput$sims.matrix[,colnames(result.dir$BUGSoutput$sims.matrix)==node]
     }
 
-    print("Direct complete")
+    message("Direct complete")
 
 
 
@@ -504,12 +530,15 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
 
     df <- network[["data.ab"]]
 
-    # Remove comparisons to split on
-    df <- drop.comp(df=df, comp=comp)
+    # Add treatment labels
+    df$treatment <- factor(df$treatment, labels=network$treatments)
 
-    if (!(1 %in% df$treatment)) {
-      string <- paste("Reference treatment removed for node-split. Treatments have been reordered with the next lowest coded treatment as the reference:\ntreatment ",
-                     min(df$treatment, na.rm=TRUE))
+    # Remove comparisons to split on
+    df <- drop.comp(df=df, comp=network$treatments[comp])
+
+    if (!(1 %in% as.numeric(df$treatment))) {
+      string <- paste("Reference treatment removed for node-split. Treatments have been reordered with the next lowest coded treatment as the reference:\n",
+                      levels(df$treatment)[min(as.numeric(df$treatment), na.rm=TRUE)])
       warning(string)
     }
 
@@ -518,7 +547,23 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
     result.ind <- do.call(mb.run, args=list(network=ind.net, fun=fun, ...))
 
     ind.dif <- list()
+
+    # Node-split at specific time
+    if (!is.null(time)) {
+
+      for (time in seq_along(times)) {
+        trtnam.ind <- c(network$treatments[comp[1]], network$treatments[comp[2]])
+        rel.ind <- get.relative(result.ind, time=times[time], lim=lim, treats=trtnam.ind)
+        ind.dif[[paste0("time", times[time])]] <- rel.ind$relarray[2,1,]
+      }
+
+
+    }
+
+    # Node-split by time-course parameter
     for (param in seq_along(nodesplit.parameters)) {
+      #print(nodesplit.parameters[param])
+
       if (grepl("beta", nodesplit.parameters[param])) {
         index <- which(nodesplit.parameters[param] %in% fun$params)
         node1 <- paste0("d.", index, "[", comp[1], "]")
@@ -534,7 +579,9 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
       ind.dif[[nodesplit.parameters[param]]] <- ind2 - ind1
     }
 
-    print("Indirect complete")
+
+
+    message("Indirect complete")
 
     #########################################
     ######### Calculate Differences ##########
@@ -598,7 +645,10 @@ mb.nodesplit <- function(network, comparisons=mb.nodesplit.comparisons(network),
 #' Drops arms with comp treatments to generate dataset for indirect MBNMA
 #' @noRd
 drop.comp <- function(df, comp) {
-  #x <- 1
+
+  # Order from least to most arms to ensure 2 arm studies get dropped first
+  df <- dplyr::arrange(df, narm, studyID)
+
   studies <- unique(df$studyID)
 
   for (i in seq_along(studies)) {
@@ -610,15 +660,23 @@ drop.comp <- function(df, comp) {
       df <- subset(df, df$studyID!=studies[i])
 
       if (subset$narm[1]>2) {
-        subset <- subset(subset, subset$treatment!=sample(comp,1))
-        #subset <- subset(subset, subset$treatment!=comp[abs(x)+1])
-        #x <- x-1
+
+        ind <- sample(1:2, 1) # Choose index 1 or 2 from comp
+
+        # Check if index sampled is the only arm with that treatment code in the network
+        if (!comp[ind] %in% df$treatment) {
+          ind <- c(1:2)[-ind]
+        }
+
+        # subset <- subset(subset, subset$treatment!=sample(comp,1))
+        subset <- subset(subset, subset$treatment!=comp[ind])
 
         # Reinsert ammended study
         df <- rbind(df, subset)
       }
     }
   }
+
   return(df)
 }
 
@@ -626,7 +684,7 @@ drop.comp <- function(df, comp) {
 
 
 
-# FUNCTION IS DEPRACATED!!!
+# FUNCTION IS DEPRECATED!!!
 check.design <- function(data, path) {
   # Ensure that no TWO comparisons in the loop share the same set of supporting studies
   # (not sure any of these steps are actually necessary)

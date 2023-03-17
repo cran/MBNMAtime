@@ -68,6 +68,9 @@ plot.nodesplit <- function(x, plot.type=NULL, params=NULL, ...) {
   }
   plot.df <- plot.df[-1,]
 
+  # Replace "pred"
+  plot.df$Parameter <- gsub("time", "time = ", plot.df$Parameter)
+
   # Factorise
   plot.df <- plot.df %>% dplyr::mutate(
     Parameter = factor(Parameter),
@@ -97,7 +100,7 @@ plot.nodesplit <- function(x, plot.type=NULL, params=NULL, ...) {
     dens.df <- subset(plot.df, Source!="NMA")
 
     dens <- ggplot2::ggplot(dens.df, ggplot2::aes(x=value, linetype=Source, fill=Source), ...) +
-      ggplot2::geom_density(alpha=0.2, size=1) +
+      ggplot2::geom_density(alpha=0.2, linewidth=0.8) +
       ggplot2::xlab("Treatment effect") +
       ggplot2::ylab("Posterior density") +
       ggplot2::scale_fill_manual(values=cols) +
@@ -123,6 +126,8 @@ plot.nodesplit <- function(x, plot.type=NULL, params=NULL, ...) {
 #' results grouped by treatment comparison.
 #' @param ... arguments to be sent to `knitr::kable()`
 #'
+#' @return Prints summary details of nodesplit results to the console
+#'
 #' @export
 print.nodesplit <- function(x, groupby="time.param", ...) {
 
@@ -139,7 +144,11 @@ print.nodesplit <- function(x, groupby="time.param", ...) {
     params <- names(x[[1]])
 
     for (i in seq_along(params)) {
-      cat(paste0("\n", crayon::bold(crayon::underline(params[i])), "\n\n"))
+
+      temp <- params[i]
+      temp <- gsub("time", "time = ", temp)
+
+      cat(paste0("\n", crayon::bold(crayon::underline(temp)), "\n\n"))
 
       param.df <- sum.df[sum.df$Time.Param==params[i],]
 

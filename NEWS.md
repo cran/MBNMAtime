@@ -1,3 +1,35 @@
+# MBNMAtime 0.2.3
+
+## Additions/changes
+- Truncated priors are used as the default priors for time-course parameters that can only take positive values (e.g. `et50`) for all functions
+- `texp()` has been removed - `titp()` is a more stable parameterisation of this function
+
+## Bug fixes
+
+### Major
+- Error fixed preventing natural splines from functioning, causing removal from CRAN
+
+### Minor
+- Return values added to documentation for functions in which they were missing
+
+# MBNMAtime 0.2.2
+
+## Additions/changes
+- Can now specify numeric values for time-course parameters in the `method` argument. Can be useful for discrete values that cannot be estimated (e.g. fractional polynomial powers, Hill parameter).
+- Fractional polynomial powers in `tfpoly()` can only take numeric values from set defined in Jansen 2015.
+- Integrated Two-Component Prediction (ITP) function (`titp()`) added
+- `get.relative()` can be used to combine two MBNMA models to allow different time-course functions to be fitted to a different set of treatments (see examples in the vignette)
+- New priors that restrict posterior to positive values where necessary can be easily incorporated. 
+- `binplot()` can be used to plot the results of NMAs conducted at multiple time bins. This can be particularly useful to explore which time-course functions might be appropriate, and to check the validity of MBNMA predictions.
+- `mb.nodesplit()` can be performed at specific time-points, in addition to by time-course parameter
+- `corparam` set to `FALSE` as default
+
+## Bug fixes
+
+### Minor
+- Error with `overlay.nma` argument in `plot.mb.predict()` fixed
+
+
 # MBNMAtime 0.2.1
 
 ## Additions/changes

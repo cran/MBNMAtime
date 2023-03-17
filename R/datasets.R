@@ -87,14 +87,14 @@
 #' deviations have been imputed for 421 observations.
 #'
 #' `obesityBW_CFB` is a data frame in long format (one row per observation, arm and study),
-#' with the variables `studyID`, `time`, `y`, `se`, `N`, `treatment`, `treatname`, `agent` and `class`.
+#' with the variables `studyID`, `time`, `y`, `se`, `n`, `treatment`, `treatname`, `agent` and `class`.
 #'
 #' @format A data frame with 710 rows and 7 variables:
 #' * `studyID` Study identifiers
 #' * `time` Numeric data indicating follow-up times
 #' * `y` Numeric data indicating the mean response for a given observation
 #' * `se` Numeric data indicating the standard error for a given observation
-#' * `N` Numeric data indicating the number of participants used to calculate means for each observation
+#' * `n` Numeric data indicating the number of participants used to calculate means for each observation
 #' * `treatment` Treatment identifiers as factors. Labels are shortened treatment names.
 #' * `treatname` Character data giving the full names of each treatment in the format agent_dose
 #' * `agent` Agent (drug) names stored as characters
@@ -119,7 +119,7 @@
 #' within the network.
 #'
 #' `alog_pcfb` is a data frame in long format (one row per observation, arm and study),
-#' with the variables `studyID`, `clinicaltrialGov_ID`, `agent`, `dose`, `treatment`, `time`, `y`, `se`, and `N`.
+#' with the variables `studyID`, `clinicaltrialGov_ID`, `agent`, `dose`, `treatment`, `time`, `y`, `se`, and `n`.
 #'
 #' @format A data frame in long format (one row per arm and study), with 46 rows and 9 variables:
 #' * `studyID` Study identifiers
@@ -130,7 +130,7 @@
 #' * `time` Numeric data indicating the time at which the observation was measured (given in weeks)
 #' * `y` Numeric data indicating the mean change from baseline in blood glucose concentration (mg/dL) in a study arm
 #' * `se` Numeric data indicating the standard error for the mean change from baseline in blood glucose concentration (mg/dL) in a study arm
-#' * `N` Numeric data indicating the number in each arm at each follow-up time
+#' * `n` Numeric data indicating the number in each arm at each follow-up time
 #'
 #' @references
 #' \insertAllCited{}
@@ -167,3 +167,62 @@
 #' \insertAllCited{}
 #'
 "copd"
+
+
+
+
+
+
+#' Studies comparing treatments for type 2 diabetes
+#'
+#' A dataset from of trials for reduction of haemoglobin A1c (HbA1c) in patients
+#' with type 2 diabetes\insertCite{dingfu2013}{MBNMAtime}.
+#' Data are reported in each study arm as mean change from baseline to follow-up.
+#' The dataset includes 4 Randomised-Controlled Trials (RCTs), comparing 4 treatments.
+#'
+#' `diabetes` is a data frame in long format (one row per observation, arm and study),
+#' with the variables `studyID`, `treatment`, `time`, `y`, `se`, `sd`, and `n`.
+#'
+#' @format A data frame in long format (one row per arm and study), with 28 rows and 7 variables:
+#' * `studyID` Study identifiers
+#' * `treatment` Numeric data indicating the treatment to which participants were randomised
+#' * `time` Numeric data indicating the time at which the observation was measured (given in weeks)
+#' * `y` Numeric data indicating the mean change from baseline in HbA1c in a study arm
+#' * `se` Numeric data indicating the standard error for the mean change from baseline in HbA1c in a study arm
+#' * `sd` Numeric data indicating the standard deviation for the mean change from baseline in HbA1c in a study arm
+#' * `n` Numeric data indicating the number of participants in each arm at each time-point
+#'
+#' @references
+#' \insertAllCited{}
+#'
+"diabetes"
+
+
+
+
+
+
+#' Studies comparing hyaluronan (HA)–based viscosupplements for osteoarthritis
+#'
+#' A dataset from of trials for pain reduction for patients with
+#' osteoarthritis treated with HA-based viscosupplements\insertCite{jansen2015}{MBNMAtime}.
+#' Data are reported in each study arm as mean change from baseline to follow-up
+#' on a visual analogue scale (0-100).
+#' The dataset includes 16 Randomised-Controlled Trials (RCTs), comparing 6 treatments
+#' and placebo.
+#'
+#' `hyalarthritis` is a data frame in long format (one row per observation, arm and study),
+#' with the variables `studyID`, `time`, `treatment`, `n`, `y`, and `se`.
+#'
+#' @format A data frame in long format (one row per arm and study), with 150 rows and 6 variables:
+#' * `studyID` Study identifiers
+#' * `time` Numeric data indicating the time at which the observation was measured (given in weeks)
+#' * `treatment` Factor data indicating the treatment to which participants were randomised
+#' * `n` Numeric data indicating the number of participants randomised to each arm
+#' * `y` Numeric data indicating the mean change from baseline in HbA1c in a study arm
+#' * `se` Numeric data indicating the standard error for the mean change from baseline in HbA1c in a study arm
+#'
+#' @references
+#' \insertAllCited{}
+#'
+"hyalarthritis"

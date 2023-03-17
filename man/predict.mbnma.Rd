@@ -2,7 +2,7 @@
 % Please edit documentation in R/mbnma-class.R
 \name{predict.mbnma}
 \alias{predict.mbnma}
-\title{Predict responses over time in a given population based on MBNMA time-course
+\title{Predict effects over time in a given population based on MBNMA time-course
 models}
 \usage{
 \method{predict}{mbnma}(
@@ -13,6 +13,7 @@ models}
   level = "treatment",
   ref.resp = NULL,
   synth = "common",
+  lim = "cred",
   ...
 )
 }
@@ -21,12 +22,12 @@ models}
 a time-course MBNMA model}
 
 \item{times}{A sequence of positive numbers indicating which time points to
-predict mean responses for}
+predict mean responses for (or at which to conduct a node-split if used with \code{mb.nodesplit()})}
 
 \item{E0}{An object to indicate the value(s) to use for the response at time = 0
 in the prediction. This can take a number of different formats depending
 on how it will be used/calculated. The default is 0 but this may lead
-to non-sensical predictions.
+to non-sensical predictions if Ratio of Means are modeled.
 \itemize{
 \item \code{numeric()} A single numeric value representing the deterministic response at time = 0
 \item \code{formula()} A formula representing a stochastic distribution for the response
@@ -62,7 +63,8 @@ parameter modelled in \code{mbnma}. Their values can be either of the following:
 \itemize{
 \item \code{numeric()} A numeric value representing the deterministic value of the time-course parameter in
 question in individuals given the reference treatment. \code{0} is used as the default, which assumes no
-effect of time on the reference treatment.
+effect of time on the reference treatment (i.e. mean differences / relative effects versus the
+reference treatment are modeled).
 \item \code{formula()} A formula representing a stochastic distribution for the value of the time-course
 parameter in question. This is specified as a random number generator (RNG) given as a formula,
 and can take any RNG distribution for which a function exists in R. For example: \code{~rnorm(n, -3, 0.2)}.
@@ -71,6 +73,8 @@ and can take any RNG distribution for which a function exists in R. For example:
 \item{synth}{A character object that can take the value \code{"common"} or \code{"random"} that
 specifies the the type of pooling to use for synthesis of \code{ref.resp}. Using \code{"random"} rather
 than \code{"common"} for \code{synth} will result in wider 95\\\% CrI for predictions.}
+
+\item{lim}{Specifies calculation of either 95\% credible intervals (\code{lim="cred"}) or 95\% prediction intervals (\code{lim="pred"}).}
 
 \item{...}{Arguments to be sent to R2jags for synthesis of the network
 reference treatment effect (using \code{\link[=ref.synth]{ref.synth()}})}
@@ -89,13 +93,17 @@ follow-up times specified in \code{times} for each treatment specified in
 }
 }
 \description{
-Used to predict responses over time for different treatments or to predict
+Used to predict effects over time for different treatments or to predict
 the results of a new study. For MBNMA models that include consistency
 relative effects on time-course parameters, this is calculated by combining
 relative treatment effects with a given reference treatment response
 (specific to the population of interest).
 }
 \details{
+By default the network reference treatment baseline (\code{E0}) and time-course
+parameter values are set to zero so that \code{predict()} estimates mean differences
+(/relative treatment effects) over time versus the network reference treatment.
+
 \code{ref.resp} only needs to be specified if \code{mbnma} has
 been estimated using consistency relative effects (\code{pool="rel"}) for
 any time-course parameters, as these inform the absolute values of the

@@ -133,7 +133,9 @@ print.treat.str <- function(mbnma, digits=4, ...) {
     }
 
     if (names(fun$apool)[i] %in% c("et50", "hill")) {
-      paramdet <- append(paramdet, "Parameter modelled on exponential scale to ensure it takes positive values on the natural scale")
+      if (TRUE %in% fun$p.expon) {
+        paramdet <- append(paramdet, "Parameter modelled on exponential scale to ensure it takes positive values on the natural scale")
+      }
     }
 
     if (names(fun$amethod)[i] %in% names(mbnma$model.arg$class.effect)) {
@@ -254,9 +256,7 @@ print.overall.str <- function(mbnma) {
   if (timefun %in% c("poly", "fpoly")) {
     timefun <- paste0(timefun, " (degree = ", mbnma$model.arg$fun$nparam, ")")
   }
-  if (timefun=="rcs") {
-    timefun <- paste0("Restricted cubic spline (knots = ", paste(mbnma$model.arg$fun$knots, collapse=", "), ")")
-  } else if (timefun=="ns") {
+  if (timefun=="ns") {
     timefun <- paste0("Natural cubic spline (knots = ", paste(mbnma$model.arg$fun$knots, collapse=", "), ")")
   } else if (timefun=="ls") {
     timefun <- paste0("Piecewise linear spline (knots = ", paste(mbnma$model.arg$fun$knots, collapse=", "), ")")

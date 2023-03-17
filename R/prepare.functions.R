@@ -143,6 +143,10 @@ add_index <- function(data.ab, reference=1) {
       reference <- levels(data.ab$treatment)[1]
       message(paste0("Reference treatment has automatically been set to `", reference, "`"))
     } else if (is.numeric(reference)) {
+      if (reference>length(levels(data.ab$treatment))) {
+        stop("Reference treatment specified is not a treatment given in the data")
+      }
+
       reference <- as.character(data.ab$treatment[as.numeric(data.ab$treatment)==reference])[1]
       message(paste0("Reference treatment is `", reference, "`"))
     } else if (is.character(reference)) {
@@ -172,7 +176,7 @@ add_index <- function(data.ab, reference=1) {
   }
 
   if (is.character(data.ab$treatment)) {
-    if (is.null(reference)) {
+    if (is.null(reference) | 1 %in% reference) {
       stop("Reference treatment must be specified if treatments are given as characters")
     } else if (is.numeric(reference)) {
       stop("Reference treatment must correspond to format of treatments provided: a character corresponding to a named treatment within the data")
@@ -252,21 +256,34 @@ add_index <- function(data.ab, reference=1) {
     dplyr::group_by(studyID, time) %>%
     dplyr::mutate(narm=dplyr::n())
 
+  # Reorder columns in data.ab
+  ord <- c("time", "treatment", "class", "narm", "arm", "y", "se", "r", "E", "n")
+  newdat <- data.frame("studyID"=data.ab$studyID)
+  for (i in seq_along(ord)) {
+    if (ord[i] %in% names(data.ab)) {
+      newdat <- cbind(newdat, data.ab[,which(names(data.ab)==ord[i])])
+    }
+  }
+  olddat <- data.ab[,!(names(data.ab) %in% c("studyID", ord))]
+  newdat <- cbind(newdat, olddat)
 
-  outlist <- list("data.ab"=data.ab,
-                  "studyID"=as.character(unique(data.ab$studyID)),
-                  "treatments"=orderlist
-                  )
+  newdat <- dplyr::arrange(newdat, dplyr::desc(newdat$narm), newdat$studyID, newdat$time, newdat$arm)
+
+  outlist <- list("data.ab"=newdat,
+                 "studyID"=as.character(unique(newdat$studyID)),
+                 "treatments"=orderlist
+                 )
+
 
   # Store class labels and recode (if they exist in data.ab)
-  if ("class" %in% names(data.ab)) {
+  if ("class" %in% names(newdat)) {
     # Create class labels
-    classdata <- data.ab[, names(data.ab) %in% c("treatment", "class")]
+    classdata <- newdat[, names(newdat) %in% c("treatment", "class")]
     classdata <- dplyr::arrange(classdata, treatment)
     classes <- as.character(unique(classdata$class))
 
     # Recode classes
-    data.ab$class <- as.numeric(factor(data.ab$class, levels=classes))
+    newdat$class <- as.numeric(factor(newdat$class, levels=classes))
 
     # Generate class key
     classkey <- unique(classdata)
@@ -364,6 +381,11 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
 
   if (link=="smd") {
     varnames <- append(varnames, "n")
+
+    # Check all values of n are present
+    if (any(is.na(data.ab$n))) {
+      stop("Missing values in n - cannot use link='smd'")
+    }
   }
 
   if (class==TRUE) {
@@ -395,7 +417,7 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
     datavars.ik <- append(datavars.ik, "n")
   }
   datavars.im <- c("time")
-  if (any(c("rcs", "ns", "bs", "ls") %in% fun$name)) {
+  if (any(c("ns", "bs", "ls") %in% fun$name)) {
     datavars.im <- append(datavars.im, "spline")
   }
 
@@ -453,7 +475,7 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
 
   # Generate empty spline matrix
   if (!is.null(fun)) {
-    if (any(c("rcs", "ns", "bs", "ls") %in% fun$name)) {
+    if (any(c("ns", "bs", "ls") %in% fun$name)) {
 
       times <- df[, colnames(df) %in% c("time")]
       times <- unique(sort(times))
@@ -475,6 +497,9 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
                                           ncol(datalist[["time"]]),
                                           knotnum))
 
+    }
+    if ("ipt" %in% fun$name) {
+      datalist[["maxtime"]] <- max(df$time)
     }
   }
 
@@ -510,7 +535,7 @@ getjagsdata <- function(data.ab, fun=NULL, class=FALSE, rho=NULL, covstruct="CS"
       datalist[["time"]][i,m] <- unique(df$time[as.numeric(df$studyID)==i &
                                            df$fupcount==m])
 
-      if (any(c("rcs", "ns", "bs", "ls") %in% fun$name)) {
+      if (any(c("ns", "bs", "ls") %in% fun$name)) {
         datalist[["spline"]][i,m,] <- as.numeric(df[as.numeric(df$studyID)==i &
                                            df$arm==1 & df$fupcount==m,
                                          grepl("spline", colnames(df))])
@@ -568,13 +593,13 @@ get.latest.time <- function(network) {
 
   checkmate::assertClass(network, "mb.network", null.ok=FALSE)
 
-  data <- do.call("rbind",
+  df <- do.call("rbind",
                   by(network[["data.ab"]], INDICES=list(network[["data.ab"]]$studyID, network[["data.ab"]]$arm),
                      FUN=function(DF) DF[which.max(DF$time), ]))
 
-  data <- dplyr::arrange(data, studyID, arm, time)
+  df <- dplyr::arrange(df, studyID, arm, time)
 
-  return(data)
+  return(df)
 }
 
 
@@ -591,17 +616,72 @@ get.latest.time <- function(network) {
 #'
 #' @return A data frame in long format of responses at the earliest time point in
 #'   each arm of each study.
+#'
+#' @examples
+#' # Using the alogliptin dataset
+#' network <- mb.network(alog_pcfb)
+#'
+#' # Generate a data frame with only the earliest time point included in each study
+#' get.earliest.time(network)
+#'
+#' @export
 get.earliest.time <- function(network) {
 
   checkmate::assertClass(network, "mb.network", null.ok=FALSE)
 
-  data <- do.call("rbind",
+  df <- do.call("rbind",
                   by(network[["data.ab"]], INDICES=list(network[["data.ab"]]$studyID, network[["data.ab"]]$arm),
                      FUN=function(DF) DF[which.min(DF$time), ]))
 
-  data <- dplyr::arrange(data, studyID, arm, time)
+  df <- dplyr::arrange(df, studyID, arm, time)
 
-  return(data)
+  return(df)
+}
+
+
+
+
+
+#' Create a dataset with a single time point from each study closest to specified time
+#'
+#' Takes the closest time point from each arm in each study to a specified time (t) within an
+#' `mb.network` object. Useful for network plots or exploring standard NMA.
+#'
+#' @inheritParams mb.run
+#' @param t The time point at which
+#'
+#' @return A data frame in long format of responses at the closest time point to t in
+#'   each arm of each study.
+#'
+#' @examples
+#'
+#' # Using the alogliptin dataset
+#' network <- mb.network(alog_pcfb)
+#'
+#' # Take a single follow-up time from each study...
+#' # ...closest to 7
+#' get.closest.time(network, t=7)
+#'
+#' # ...closest to 20
+#' get.closest.time(network, t=7)
+#'
+#' # ...closest to the median follow-up across all studies
+#' get.closest.time(network, t=26)
+#'
+#' @export
+get.closest.time <- function(network, t=stats::median(network$data.ab$time)) {
+
+  checkmate::assertClass(network, "mb.network", null.ok=FALSE)
+  checkmate::assertNumeric(t, len=1)
+
+  df <- network$data.ab
+
+  df <- df %>% dplyr::group_by(studyID, arm) %>%
+    dplyr::slice_min(time - t)
+
+  df <- dplyr::arrange(df, studyID, arm, time)
+
+  return(df)
 }
 
 
@@ -612,7 +692,7 @@ get.earliest.time <- function(network) {
 
 
 
-# FUNCTION IS DEPRACATED!!!
+# FUNCTION IS DEPRECATED!!!
 makecontrast <- function(id, treatdose, y=NULL, sd=NULL, n, r=NULL) {
   ######################################################################
   #### Make contrast converts arm-level data to contrast-level data ####
@@ -1121,7 +1201,7 @@ mb.validate.data <- function(data.ab, single.arm=FALSE, CFB=TRUE) {
 #'
 #' @param x A numeric vector indicating all time points available in the dataset
 #' @param spline Indicates the type of spline function. Can be either a piecewise linear spline (`"ls"`),
-#' natural cubic spline (`"ns"`), restricted cubic spline (`"rcs"`) or B-spline (`"bs"`).
+#' natural cubic spline (`"ns"`) or B-spline (`"bs"`).
 #' @param degree a positive integer giving the degree of the polynomial from which the spline function is composed
 #'  (e.g. `degree=3` represents a cubic spline).
 #' @param max.time A number indicating the maximum time between which to calculate the spline function.
@@ -1129,6 +1209,9 @@ mb.validate.data <- function(data.ab, single.arm=FALSE, CFB=TRUE) {
 #'   be equally spaced across the range of time-points). If a numeric vector is given it indicates the quantiles of the knots as
 #'   a proportion of the maximum study follow-up in the dataset. For example, if the maximum follow-up time in the dataset
 #'   is 10 months, `knots=c(0.1,0.5)` would indicate knots should be fitted at 1 and 5 months follow-up.
+#' @param boundaries A positive numeric vector of length 2 that represents the time-points at which to anchor the B-spline or natural
+#' cubic spline basis matrix. This allows data to extend beyond the boundary knots, or for the basis parameters to not depend on `x`.
+#' The default (`boundaries=NULL`)is the range of `x`.
 #'
 #' @return A spline basis matrix with number of rows equal to `length(x)` and the number of columns equal to the number
 #' of coefficients in the spline.
@@ -1141,20 +1224,21 @@ mb.validate.data <- function(data.ab, single.arm=FALSE, CFB=TRUE) {
 #' # Generate a quadratic B-spline with 1 equally spaced internal knot
 #' genspline(x, spline="bs", knots=2, degree=2)
 #'
-#' # Generate a restricted cubic spline with 3 knots at selected quantiles
-#' genspline(x, spline="rcs", knots=c(0.1, 0.5, 0.7))
+#' # Generate a natural spline with 2 knots at selected quantiles
+#' genspline(x, spline="ns", knots=c(0.1, 0.5))
 #'
 #' # Generate a piecewise linear spline with 3 equally spaced knots
 #' genspline(x, spline="ls", knots=3)
 #'
 #' @export
-genspline <- function(x, spline="bs", knots=1, degree=1, max.time=max(x)){
+genspline <- function(x, spline="bs", knots=1, degree=1, max.time=max(x), boundaries=NULL){
 
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertNumeric(knots, add=argcheck)
   checkmate::assertIntegerish(degree, add=argcheck)
   checkmate::assertNumeric(max.time, null.ok = FALSE, add=argcheck)
+  checkmate::assertNumeric(boundaries, null.ok = TRUE, len = 2, lower = 0, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   # Check knot specification
@@ -1194,13 +1278,15 @@ genspline <- function(x, spline="bs", knots=1, degree=1, max.time=max(x)){
       knots <- stats::quantile(0:max.time, probs = knots)
     }
 
+    if (is.null(boundaries)) {
+      boundaries <- range(x0)
+    }
+
     # Generate spline basis matrix
     if (spline=="bs") {
-      splinedesign <- splines::bs(x=x0, knots=knots, degree=degree)
-    } else if (spline=="rcs") {
-      splinedesign <- Hmisc::rcspline.eval(x0, knots = knots, inclx = TRUE)
+      splinedesign <- splines::bs(x=x0, knots=knots, degree=degree, Boundary.knots = boundaries)
     } else if (spline=="ns") {
-      splinedesign <- splines::ns(x=x0, knots=knots)
+      splinedesign <- splines::ns(x=x0, knots=knots, Boundary.knots = boundaries)
 
       # splinedesign <- splines::ns(x0, knots=knots)
       # splinedesign <- cbind(x0, splinedesign)
@@ -1267,7 +1353,7 @@ getnmadata <- function(data.ab, link="identity") {
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertDataFrame(data.ab, add=argcheck)
-  checkmate::assertChoice(link, choices = c("identity", "smd", "rom"), null.ok = FALSE, add=argcheck)
+  checkmate::assertChoice(link, choices = c("identity", "smd", "log"), null.ok = FALSE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   df <- data.ab
@@ -1343,3 +1429,184 @@ getnmadata <- function(data.ab, link="identity") {
 
 
 
+
+bintime <- function(data.ab) {
+
+  times <- sort(unique(data.ab$time))
+  bins <- seq(0,max(times), min(diff(times)))
+  return(bins)
+}
+
+
+
+
+
+
+getrwdata <- function(data.ab, link="identity", class=FALSE, binvals=bintime(data.ab)) {
+
+  # Run Checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertDataFrame(data.ab, add=argcheck)
+  checkmate::assertChoice(link, choices = c("identity", "smd", "log"), null.ok = FALSE, add=argcheck)
+  checkmate::assertNumeric(bins, lower = 0, null.ok=FALSE)
+  checkmate::reportAssertions(argcheck)
+
+  df <- data.ab
+
+  varnames <- c("y", "se", "time", "treatment", "arm")
+
+  if (link=="smd") {
+    varnames <- append(varnames, "n")
+  }
+
+  # Check correct variables are present
+  if (!all(varnames %in% names(df))) {
+    msg <- paste0("Variables are missing from dataset:\n",
+                  paste(varnames[!(varnames %in% names(df))], collapse="\n"))
+    stop(msg)
+  }
+
+  # Create empty dataset at all bins
+  df.empty <- df[df$fupcount==df$fups,] # Single time-point from each study
+  df.empty[,c("y", "se", "time", "n", "tbin")] <- NA
+
+  fulldf <- df.empty[0]
+  for (i in 2:length(binvals)) {
+    rows <- df.empty
+    rows$tbin <- i-1
+    fulldf <- rbind(fulldf, rows)
+  }
+
+  # Replace values where data is available
+  if (!"n" %in% names(df)) {
+    df$n <- NA
+  }
+
+  # Assign rows to bin values
+  for (i in 2:length(binvals)) {
+    df$tbin[df$time>binvals[i-1] & df$time<=binvals[i]] <- i-1
+  }
+  #df$tbin <- match(df$time, binvals[-1])
+
+  # Select single study time for each bin?
+  df <- df %>% dplyr::group_by(studyID, arm,tbin) %>%
+    dplyr::slice_min(time - mean(c(binvals[tbin+1], binvals[tbin])))
+
+  for (i in seq_along(df$studyID)) {
+    matchind <- which(fulldf$studyID==df$studyID[i] &
+      fulldf$arm==df$arm[i] &
+      fulldf$tbin==df$tbin[i]
+    )
+    if (length(matchind)!=1) {
+      stop("Matching empty RW dataset and dataset has failed")
+    }
+    fulldf[matchind,] <- df[i,]
+  }
+
+  # Prepare df
+  df <- dplyr::arrange(fulldf, dplyr::desc(narm), studyID, tbin, arm)
+
+  df$studynam <- df$studyID
+  df <- transform(df,studyID=as.numeric(factor(studyID, levels=as.character(unique(df$studyID)))))
+
+  nbin <- max(df$tbin)
+
+  # Prepare list variables at each level
+  datavars.ikm <- c("y", "se")
+  datavars.ik <- c("treat")
+  datavars.im <- c("time")
+  if (link=="smd") {
+    datavars.ik <- append(datavars.ik, "n")
+  }
+
+  # Create a separate object for each datavars
+  for (i in seq_along(datavars.ikm)) {
+    assign(datavars.ikm[i], array(rep(NA, max(as.numeric(df$studyID))*max(df$arm)*nbin),
+                                  dim=c(max(as.numeric(df$studyID)),
+                                        max(df$arm),
+                                        nbin
+                                  ))
+    )
+  }
+  for (i in seq_along(datavars.ik)) {
+    assign(datavars.ik[i], array(rep(NA, max(as.numeric(df$studyID))*max(df$arm)),
+                                 dim=c(max(as.numeric(df$studyID)),
+                                       max(df$arm)
+                                 ))
+    )
+  }
+  for (i in seq_along(datavars.im)) {
+    assign(datavars.im[i], array(rep(NA, max(as.numeric(df$studyID))*nbin),
+                                 dim=c(max(as.numeric(df$studyID)),
+                                       nbin
+                                 ))
+    )
+  }
+
+  narm <- vector()
+  NS <- max(as.numeric(df$studyID))
+
+  # Generate list in which to store individual data variables
+  datalist <- list(get(datavars.ikm[1]), get(datavars.ikm[2]))
+
+  datalist <- append(datalist, list(narm=narm, nbin=nbin, NS=NS,
+                                    studyID=vector(), NT=max(df$treatment)))
+  names(datalist)[1:length(datavars.ikm)] <- datavars.ikm
+
+  for (i in seq_along(datavars.ik)) {
+    datalist[[datavars.ik[i]]] <- get(datavars.ik[i])
+  }
+  for (i in seq_along(datavars.im)) {
+    datalist[[datavars.im[i]]] <- get(datavars.im[i])
+  }
+
+  if (class==TRUE) {
+    codes <- data.frame(df$treatment, df$class)
+    codes <- dplyr::arrange(codes, df$treatment)
+    classcode <- unique(codes)$df.class
+
+    datalist[["Nclass"]] <- length(unique(df$class))
+    datalist[["class"]] <- classcode
+  }
+
+  # Add data to datalist elements
+  for (i in 1:max(as.numeric(df$studyID))) {
+    datalist[["studyID"]] <- append(datalist[["studyID"]], df$studynam[as.numeric(df$studyID)==i][1])
+
+    for (k in 1:max(df$arm[df$studyID==i])) {
+
+      datalist[["treat"]][i,k] <- unique(df$treatment[as.numeric(df$studyID)==i &
+                                                        df$arm==k])
+
+      if (link=="smd") {
+        tempdf <- df %>% dplyr::group_by(studyID,arm) %>% dplyr::summarise(n = n[which(!is.na(n))[1]])
+        datalist[["n"]][i,k] <- unique(tempdf$n[which(tempdf$studyID==df$studyID[i] &
+                                              tempdf$arm==df$arm[k])])
+      }
+
+      # for (z in seq_along(datavars.ik)) {
+      #   datalist[[datavars.ik[z]]][i,k] <- unique(df[[datavars.ik[z]]][as.numeric(df$studyID)==i &
+      #                                                                    df$arm==k])
+      # }
+
+      for (m in 1:nbin) {
+        for (z in seq_along(datavars.ikm)) {
+          datalist[[datavars.ikm[z]]][i,k,m] <- df[[datavars.ikm[z]]][as.numeric(df$studyID)==i &
+                                                                        df$arm==k & df$tbin==m]
+        }
+
+        for (z in seq_along(datavars.im)) {
+          datalist[[datavars.im[z]]][i,m] <- unique(df[[datavars.im[z]]][as.numeric(df$studyID)==i &
+                                                                           df$tbin==m])
+        }
+      }
+    }
+
+    datalist[["narm"]] <- append(datalist[["narm"]], max(df$arm[as.numeric(df$studyID)==i]))
+  }
+
+  # Fill missing SE values with high SE
+  datalist$se[is.na(datalist$se)] <- 10000
+
+  return(datalist)
+}

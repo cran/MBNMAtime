@@ -10,38 +10,52 @@ temax(
   pool.et50 = "rel",
   method.et50 = "common",
   pool.hill = NULL,
-  method.hill = NULL
+  method.hill = NULL,
+  p.expon = FALSE
 )
 }
 \arguments{
 \item{pool.emax}{Pooling for Emax parameter. Can take \code{"rel"} or \code{"abs"} (see details).}
 
-\item{method.emax}{Method for synthesis of Emax parameter. Can take \verb{"common} or \code{"random"} (see details).}
+\item{method.emax}{Method for synthesis of Emax parameter. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
 
 \item{pool.et50}{Pooling for ET50 parameter. Can take \code{"rel"} or \code{"abs"} (see details).}
 
-\item{method.et50}{Method for synthesis of ET50 parameter. Can take \verb{"common} or \code{"random"} (see details).}
+\item{method.et50}{Method for synthesis of ET50 parameter. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
 
 \item{pool.hill}{Pooling for Hill parameter. Can take \code{"rel"} or \code{"abs"} (see details).}
 
-\item{method.hill}{Method for synthesis of Hill parameter. Can take \verb{"common} or \code{"random"} (see details).}
+\item{method.hill}{Method for synthesis of Hill parameter. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
+
+\item{p.expon}{Should parameters that can only take positive values be modeled on the exponential scale (\code{TRUE})
+or should they be assigned a prior that restricts the posterior to positive values (\code{FALSE})}
 }
 \value{
 An object of \code{class("timefun")}
 }
 \description{
-Emax time-course function
+** For version 0.2.3: to ensure positive posterior values, et50 and hill parameters are now
+modeled on the natural scale using a half-normal prior rather than a symmetrical prior
+on the exponential scale to improve model stability **
 }
 \details{
-Emax represents the maximum response.
-exp(ET50) represents the time at which 50\% of the maximum response is achieved.
-exp(Hill) is the Hill parameter, which allows for a sigmoidal function.
+\itemize{
+\item Emax represents the maximum response.
+\item ET50 represents the time at which 50\% of the maximum response is achieved. This can only take
+positive values and so is modeled on the exponential scale and assigned a symmetrical normal prior
+Alternatively it can be assigned a normal prior truncated at zero (half-normal) (this
+will be the default in MBNMAtime version >=0.2.3).
+\item Hill is the Hill parameter, which allows for a sigmoidal function. This can only take
+positive values and so is modeled on the exponential scale and assigned a symmetrical normal prior
+Alternatively it can be assigned a normal prior truncated at zero (half-normal) (this
+will be the default in MBNMAtime version >=0.2.3).
+}
 
 Without Hill parameter:
-\deqn{\frac{E_{max}\times{x}}{e^{ET_{50}}+x}}
+\deqn{\frac{E_{max}\times{x}}{ET_{50}+x}}
 
 With Hill parameter:
-\deqn{\frac{E_{max}\times{x^{e^{hill}}}}{e^{ET_{50}\times{e^{hill}}}+x^{e^{hill}}}}
+\deqn{\frac{E_{max}\times{x^{hill}}}{ET_{50}\times{hill}+x^{hill}}}
 }
 \section{Time-course parameters}{
 
@@ -60,6 +74,7 @@ and can take any of the following values:\tabular{ll}{
    \strong{Argument} \tab \strong{Model specification} \cr
    \code{"common"} \tab Implies that all studies estimate the same true effect (often called a "fixed effect" meta-analysis) \cr
    \code{"random"} \tab Implies that all studies estimate a separate true effect, but that each of these true effects vary randomly around a true mean effect. This approach allows for modelling of between-study heterogeneity. \cr
+   \code{numeric()} \tab Assigned a numeric value, indicating that this time-course parameter should not be estimated from the data but should be assigned the numeric value determined by the user. This can be useful for fixing specific time-course parameters (e.g. Hill parameters in Emax functions, power parameters in fractional polynomials) to a single value. \cr
 }
 
 

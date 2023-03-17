@@ -14,7 +14,7 @@ mb.run(
   rho = 0,
   covar = "varadj",
   omega = NULL,
-  corparam = TRUE,
+  corparam = FALSE,
   class.effect = list(),
   UME = FALSE,
   pd = "pv",
@@ -33,7 +33,7 @@ mb.run(
 \item{network}{An object of class \code{"mb.network"}.}
 
 \item{fun}{An object of class \code{"timefun"} generated (see Details) using any of
-\code{tloglin()}, \code{tpoly()}, \code{texp()}, \code{temax()}, \code{tfpoly()}, \code{tspline()} or \code{tuser()}}
+\code{tloglin()}, \code{tpoly()}, \code{titp()}, \code{temax()}, \code{tfpoly()}, \code{tspline()} or \code{tuser()}}
 
 \item{positive.scale}{A boolean object that indicates whether all continuous
 mean responses (y) are positive and therefore whether the baseline response
@@ -67,15 +67,19 @@ time points \insertCite{jansen2015}{MBNMAtime}. This is the default.
 \href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 }}
 
-\item{omega}{A scale matrix for the inverse-Wishart prior for the covariance matrix used
+\item{omega}{DEPRECATED IN VERSION 0.2.3 ONWARDS (~uniform(-1,1) now used for correlation between parameters
+rather than a Wishart prior).
+A scale matrix for the inverse-Wishart prior for the covariance matrix used
 to model the correlation between time-course parameters (see Details for time-course functions). \code{omega} must
 be a symmetric positive definite matrix with dimensions equal to the number of time-course parameters modelled using
 relative effects (\code{pool="rel"}). If left as \code{NULL} (the default) a diagonal matrix with elements equal to 1
 is used.}
 
-\item{corparam}{A boolean object that indicates whether correlation should be modelled
-between relative effect time-course parameters. This is automatically set to \code{FALSE} if class effects are modelled.
-It can also be useful for providing informative priors more easily to the model.}
+\item{corparam}{A boolean object that indicates whether correlation should be modeled
+between relative effect time-course parameters. Default is \code{FALSE} and this is automatically set to \code{FALSE} if class effects are modeled.
+Setting it to \code{TRUE} models correlation between time-course parameters. This can help identify parameters
+that are estimated poorly for some treatments by allowing sharing of information between
+parameters for different treatments in the network, but may also cause some shrinkage.}
 
 \item{class.effect}{A list of named strings that determines which time-course
 parameters to model with a class effect and what that effect should be
@@ -195,7 +199,7 @@ Available time-course functions are:
 \itemize{
 \item Log-linear: \code{tloglin()}
 \item Polynomial: \code{tpoly()}
-\item Exponential: \code{texp()}
+\item Integrated Two-Component Prediction (ITP): \code{titp()}
 \item Emax: \code{temax()}
 \item Fractional polynomial: \code{tfpoly()}
 \item Splines (various spline types can be used): \code{tspline()}
@@ -237,7 +241,7 @@ mb.run(network, fun=tpoly(degree=1, pool.1="rel", method.1="random"))
 result <- mb.run(network, fun=temax(pool.emax="rel", method.emax="common",
                                     pool.et50="abs", method.et50="common",
                                     pool.hill="abs", method.hill="common"),
-                 priors=list(hill="dnorm(0, 0.1)"),
+                 priors=list(hill="dunif(0.5, 2)"),
                  intercept=TRUE)
 
 

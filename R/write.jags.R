@@ -82,7 +82,7 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
   timecourse <- alphacode[["timecourse"]]
   model <- alphacode[["model"]]
 
-  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar, link=link)
+  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar, link=link, fun=fun)
 
   model <- write.beta(model=model, timecourse=timecourse, fun=fun,
                       UME=UME, class.effect=class.effect)
@@ -261,11 +261,12 @@ write.timecourse <- function(model, fun,
                         intercept, positive.scale) {
 
   timecourse <- fun$jags
+  priors <- default.priors(fun)
   if (!is.null(intercept)) {
     if (intercept==TRUE) {
 
       # Insert prior for alpha
-      model <- model.insert(model, pos=which(names(model)=="study"), "alpha[i] ~ dnorm(0,0.0001)")
+      model <- model.insert(model, pos=which(names(model)=="study"), priors[["alpha"]])
 
       if (positive.scale==TRUE) {
         timecourse <- paste0("exp(alpha[i]) + ", timecourse)
@@ -275,7 +276,7 @@ write.timecourse <- function(model, fun,
     }
   } else if (is.null(intercept)) {
     # Insert prior for alpha
-    model <- model.insert(model, pos=which(names(model)=="study"), "alpha[i] ~ dnorm(0,0.0001)")
+    model <- model.insert(model, pos=which(names(model)=="study"), priors[["alpha"]])
 
     if (positive.scale==TRUE) {
       timecourse <- paste0("exp(ifelse(intercept[i]==1, alpha[i], 0)) + ", timecourse)
@@ -331,7 +332,7 @@ model.insert <- function(a, pos, x){
 #' @return A character vector of JAGS MBNMA model code that includes likelihood
 #'   components of the model
 #'
-write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="identity") {
+write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="identity", fun) {
 
   # Likelihoods
   norm.like <- c(
@@ -363,7 +364,7 @@ write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="ide
   # Write rho prior and multivariate code sections
   if (!is.null(rho)) {
     if (is.character(rho)) {
-      rho.prior <- paste0("rho ~ ", rho)
+      rho.prior <- default.priors(fun)[["rho"]]
     } else if (is.numeric(rho)) {
       rho.prior <- paste0("rho <- ", rho)
     }
@@ -431,7 +432,10 @@ write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="ide
       model <- subset(model, !grepl("dev", model))
     }
     if (covar %in% c("varadj")) {
-      norm.like[1] <- gsub("(prec\\[i\\,k\\,m\\])", "\\1*(1-rho2)", norm.like[1])
+      # norm.like[1] <- gsub("(prec\\[i\\,k\\,m\\])", "\\1*(1-rho2)", norm.like[1])
+      norm.like[1] <- gsub("prec\\[i\\,k\\,m\\] \\<\\- pow\\(se\\[i\\,k\\,m\\]",
+                           "\\1*(1-rho2)", norm.like[1])
+
       model <- model.insert(model, pos=which(names(model)=="fup"), x=norm.like)
 
       model <- model.insert(model, pos=which(names(model)=="start"), x="rho2 <- rho*rho")
@@ -487,6 +491,8 @@ write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="ide
 #'
 write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
+  priors <- default.priors(fun)
+
   for (i in seq_along(fun$apool)) {
     if (fun$apool[i]=="rel") {
 
@@ -496,7 +502,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
       # Add prior for mu
       model <- model.insert(model, pos=which(names(model)=="study"),
-                            x=paste0("mu.", i, "[i] ~ dnorm(0,0.0001)"))
+                            x=priors[[paste0("mu.", i)]])
 
       # Add reference arm = 0 for delta
       model <- model.insert(model, pos=which(names(model)=="study"),
@@ -515,7 +521,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
         # Insert treatment effect prior
         model <- model.insert(model, pos=which(names(model)=="trt.prior"),
-                              x=paste0("d.", i, "[k] ~ dnorm(0,0.001)"))
+                              x=priors[[paste0("d.", i)]])
 
         # CLASS EFFECTS
       } else if (fun$params[i] %in% names(class.effect)) {
@@ -526,7 +532,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
         # Insert class effect priors
         model <- model.insert(model, pos=which(names(model)=="class.prior"),
-                              x=paste0("D.", i, "[k] ~ dnorm(0,0.001)"))
+                              x=priors[[paste0("D.", i)]])
 
         if (class.effect[[fun$params[i]]]=="common") {
           # Set trt effect equal to class effect
@@ -540,7 +546,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert sd.D prior
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.D.", i, " ~ dnorm(0,0.05) T(0,)"),
+                                x=c(priors[[paste0("sd.D.", i)]],
                                   paste0("tau.D.", i, " <- pow(sd.D.", i, ", -2)")
                                   )
                                 )
@@ -551,7 +557,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
       if (fun$params[i] %in% UME) {
         # Inset UME prior
         model <- model.insert(model, pos=which(names(model)=="ume.prior"),
-                              x=paste0("d.", i, "[c,k] ~ dnorm(0,0.001)"))
+                              x=priors[[paste0("dume.", i)]])
 
         # Set reference UME to zero
         model <- model.insert(model, pos=which(names(model)=="start"),
@@ -569,7 +575,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert prior for heterogeneity
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)"),
+                                x=c(priors[[paste0("sd.beta.", i)]],
                                   paste0("tau.", i, " <- pow(sd.beta.", i, ", -2)"))
                                 )
         }
@@ -592,7 +598,7 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
 
           # Insert prior for heterogeneity
           model <- model.insert(model, pos=which(names(model)=="end"),
-                                x=c(paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)"),
+                                x=c(priors[[paste0("sd.beta.", i)]],
                                   paste0("tau.", i, " <- pow(sd.beta.", i, ", -2)"))
           )
 
@@ -608,10 +614,11 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
   for (i in seq_along(fun$amethod)) {
     if ("abs" %in% fun$apool[i]) {
 
-      if (is.character(fun$amethod[i])) {
+      if (grepl("[A-z]", fun$amethod[i])) {
+      # if (is.character(fun$amethod[i])) {
         # Insert prior for absolute effect
         model <- model.insert(model, pos=which(names(model)=="end"),
-                              x=paste0("beta.", i, " ~ dnorm(0,0.0001)"))
+                              x=priors[[paste0("beta.", i)]])
 
 
         if (fun$amethod[i]=="random") {
@@ -622,14 +629,13 @@ write.beta <- function(model, timecourse, fun, UME, class.effect) {
           # Insert sd prior for random absolute effect
           model <- model.insert(model, pos=which(names(model)=="end"),
                                 x=c(paste0("prec.beta.", i, " <- pow(sd.beta.", i, ", -2)"),
-                                  paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)")
-                                )
+                                    priors[[paste0("sd.beta.", i)]])
           )
         }
-      } else if (is.numeric(fun$amethod[i])) {
+      } else if (grepl("[0-9]", fun$amethod[i])) {
         # Insert fixed value for absolute effect
         model <- model.insert(model, pos=which(names(model)=="start"),
-                              x=paste0("beta.", i, " <- ", fun$amethod[i]))
+                              x=paste0("beta.", i, " <- ", as.numeric(fun$amethod[i])))
 
       }
     }
@@ -661,8 +667,8 @@ write.cor <- function(model, fun, omega=NULL, class.effect=list()) {
     mat.size <- length(sufparams)
     if (mat.size>=2) {
       model <- write.cov.mat(model, sufparams=sufparams,
-                             cor="estimate", cor.prior="wishart",
-                             omega=omega)
+                             cor="estimate", cor.prior="rho",
+                             omega=omega, fun=fun)
     }
   }
   return(model)
@@ -679,26 +685,47 @@ write.cor <- function(model, fun, omega=NULL, class.effect=list()) {
 #'  matrix size).
 #' @noRd
 write.cov.mat <- function(model, sufparams, cor="estimate", cor.prior="wishart",
-                          omega=NULL) {
+                          omega=NULL, fun) {
+
+  priors <- default.priors(fun)
+
+  if (any(c("itp", "emax") %in% fun$name) & FALSE %in% fun$p.expon) {
+    d.zero <- 0.00001
+  } else {
+    d.zero <- 0
+  }
 
   jagswish <- c(
     "for (r in 1:mat.size) {",
-    "d.prior[r] <- 0",
+    paste0("d.prior[r] <- ", d.zero),
     "}",
     "",
-    "inv.R ~ dwish(omega[,], mat.size)"
+    priors[["inv.R"]]
   )
 
+  # jagsrho <- c(
+  #   "for (r in 1:mat.size) {",
+  #   paste0("d.prior[r] <- ", d.zero),
+  #   "R[r,r] <- 1000    # Covariance matrix diagonals",
+  #   "}",
+  #   "",
+  #   "for (r in 1:(mat.size-1)) {  # Covariance matrix upper/lower triangles",
+  #   "for (c in (r+1):mat.size) {",
+  #   "R[r,c] <- 1000*rho[1]   # Lower triangle",
+  #   "R[c,r] <- 1000*rho[1]   # Upper triangle",
+  #   "}",
+  #   "}"
+  # )
   jagsrho <- c(
     "for (r in 1:mat.size) {",
-    "d.prior[r] <- 0",
-    "R[r,r] <- 1000    # Covariance matrix diagonals",
-    "}",
-    "",
-    "for (r in 1:(mat.size-1)) {  # Covariance matrix upper/lower triangles",
-    "for (c in (r+1):mat.size) {",
-    "R[r,c] <- 1000*rho[1]   # Lower triangle",
-    "R[c,r] <- 1000*rho[1]   # Upper triangle",
+    paste0("d.prior[r] <- ", d.zero),
+    "R[r,r] <- 1    # Covariance matrix diagonals",
+    "L[r,r] <- pow(R[r,r],0.5) # Cholesky decomposition of covariance matrix",
+    "for (c in 1:(r-1)) {  # Covariance matrix upper/lower triangles",
+    "R[r,c] <- 1*rhoparam   # Lower triangle",
+    "R[c,r] <- 1*rhoparam   # Upper triangle",
+    "L[r,c] <- R[r,c] / L[c,c]",
+    "L[c,r] <- 0",
     "}",
     "}"
   )
@@ -706,18 +733,14 @@ write.cov.mat <- function(model, sufparams, cor="estimate", cor.prior="wishart",
   mat.size <- length(sufparams)
   for (i in seq_along(sufparams)) {
     # Change d.1[k] ~ dnorm(0,0.001)  to   d.1[k] <- d.mult[1,k]
-    model <- gsub(paste0("^d\\.", sufparams[i], "\\[k\\] ~ [a-z]+\\([0-9]+(\\.[0-9]+)?,[0-9]+(\\.?[0-9]+)?\\)"),
+    model <- gsub(paste0("^d\\.", sufparams[i], "\\[k\\].+$"),
+                  #paste0("^d\\.", sufparams[i], "\\[k\\] ~ [a-z]+\\([0-9]+(\\.[0-9]+)?,[0-9]+(\\.?[0-9]+)?\\)"),
                   paste0("d.", sufparams[i], "[k] <- mult[", i, ",k]"),
                   model
     )
 
-    # Add correlation for mu
-    # model <- gsub(paste0("mu\\.", sufparams[i], "\\[i\\]"),
-    #               paste0("mu\\[i,", sufparams[i], "\\]"),
-    #               model
-    # )
-    # model <- model[-grep(paste0("^mu\\[i,", sufparams[i], "\\]"), model)]
-    model <- gsub(paste0("^mu\\.", sufparams[i], "\\[i\\] ~ [a-z]+\\([0-9]+(\\.[0-9]+)?,[0-9]+(\\.?[0-9]+)?\\)"),
+    model <- gsub(paste0("^mu\\.", sufparams[i], "\\[i\\].+$"),
+                  #paste0("^mu\\.", sufparams[i], "\\[i\\] ~ [a-z]+\\([0-9]+(\\.[0-9]+)?,[0-9]+(\\.?[0-9]+)?\\)"),
                   paste0("mu.", sufparams[i], "[i] <- mumult[i,", i, "]"),
                   model
     )
@@ -733,27 +756,50 @@ write.cov.mat <- function(model, sufparams, cor="estimate", cor.prior="wishart",
     # Insert multivariate normal dist for mu (Wishart)
     model <- model.insert(model, pos=which(names(model)=="study"),
                           x=paste0("mumult[i,1:", mat.size, "] ~ dmnorm(d.prior[], muinv.R[1:", mat.size, ", 1:", mat.size, "])"))
-    # model <- model.insert(model, pos=which(names(model)=="study"),
-    #                       x=paste0("mu[i,1:", mat.size, "] ~ dmnorm(d.prior[], muinv.R[1:", mat.size, ", 1:", mat.size, "])"))
 
     model <- model.insert(model, pos=which(names(model)=="end"),
                           x=paste0("muinv.R ~ dwish(omega[,], ", mat.size, ")"))
 
-    # # Check that var.scale has correct length and add omega to code
-    # if (is.null(var.scale)) {
-    #   var.scale <- rep(1,mat.size)
-    # } else if (length(var.scale)!=mat.size) {
-    #   stop(paste0("`var.scale` must be a numeric vector whose length is the size of the covariance matrix for dose-response parameters.\nCovariance matrix size = ", mat.size))
-    # }
-    # for (i in seq_along(var.scale)) {
-    #
-    #   # Insert omega
-    #   model <- model.insert(model, pos=which(names(model)=="end"),
-    #                         x=paste0("omega[", i, ",", i, "] <- ", var.scale[i]))
-    #
-    # }
 
+  } else if (cor.prior=="rho") {
+    addcode <- jagsrho
+
+    jagsrho.mu <- c(
+      paste0("for (r in 1:", mat.size, ") {"),
+      "mumult[i,r] <- d.prior[r] + L[r,1:r] %*% mu.z[i,1:r]",
+      "}"
+    )
+
+    jagsrho.d <- c(
+      paste0("for (r in 1:", mat.size, ") {"),
+      "mult[r,k] <- d.prior[r] + L[r,1:r] %*% z[1:r,k]",
+      "}"
+    )
+
+    # Insert correlated univariate chunks
+    model <- model.insert(model, pos=which(names(model)=="study"),
+                          x=jagsrho.mu)
+    model <- model.insert(model, pos=which(names(model)=="trt.prior"),
+                          x=jagsrho.d)
+
+    # Insert prior for corparam
+    model <- model.insert(model, pos=which(names(model)=="end"),
+                          x=priors[["rhoparam"]])
+
+
+    for (i in seq_along(sufparams)) {
+
+      # Insert correlated univariate priors for mu
+      model <- model.insert(model, pos=which(names(model)=="study"),
+                            x=priors[[paste0("mu.z.",sufparams[i])]])
+
+      # Insert correlated univariate priors for d
+      model <- model.insert(model, pos=which(names(model)=="trt.prior"),
+                            x=priors[[paste0("z.",sufparams[i])]])
+    }
   }
+
+
   addcode <- gsub("mat\\.size", mat.size, addcode)
 
   # Insert covariance matrix
@@ -1010,9 +1056,9 @@ write.ref.synth <- function(fun=tpoly(degree = 1), link="identity",
   timecourse <- alphacode[["timecourse"]]
   model <- alphacode[["model"]]
 
-  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar, link=link)
+  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar, link=link, fun=fun)
 
-  model <- write.beta.ref(model=model, timecourse=timecourse, fun=fun)
+  model <- write.beta.ref(model=model, timecourse=timecourse, fun=fun, mu.synth=mu.synth)
 
   model <- remove.loops(model)
 
@@ -1042,11 +1088,13 @@ write.beta.ref <- function(model, timecourse, fun,
                            mu.synth="random"
 ) {
 
+  priors <- default.priors(fun)
+
   for (i in seq_along(fun$apool)) {
     if ("rel" %in% fun$apool[i]) {
 
       model <- model.insert(model, pos=which(names(model)=="end"),
-                            x=paste0("mu.", i, " ~ dnorm(0,0.0001)"))
+                            x=priors[[paste0("m.mu.",i)]])
 
       if (mu.synth=="common") {
         model <- gsub(paste0("beta\\.",i, "\\[i\\,k\\]"), paste0("mu.",i), model)
@@ -1057,14 +1105,14 @@ write.beta.ref <- function(model, timecourse, fun,
                               x=paste0("i.mu.", i, "[i,k] ~ dnorm(mu.", i, ", tau.mu.", i, ")"))
 
         model <- model.insert(model, pos=which(names(model)=="end"),
-                              x=paste0("sd.mu.", i, " ~ dnorm(0,0.05) T(0,)"))
+                              x=priors[[paste0("sd.mu.", i)]])
         model <- model.insert(model, pos=which(names(model)=="end"),
                               x=paste0("tau.mu.", i, " <- pow(sd.mu.", i, ", -2)"))
       }
     } else if ("abs" %in% fun$apool[i]) {
       # Insert prior for absolute effect
       model <- model.insert(model, pos=which(names(model)=="end"),
-                            x=paste0("beta.", i, " ~ dnorm(0,0.0001)"))
+                            x=priors[[paste0("beta.", i)]])
 
 
       if (fun$amethod[i]=="random") {
@@ -1075,8 +1123,7 @@ write.beta.ref <- function(model, timecourse, fun,
         # Insert sd prior for random absolute effect
         model <- model.insert(model, pos=which(names(model)=="end"),
                               x=c(paste0("prec.beta.", i, " <- pow(sd.beta.", i, ", -2)"),
-                                  paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)")
-                              )
+                                  priors[[paste0("sd.beta.", i)]])
         )
       }
     }
@@ -1136,7 +1183,7 @@ write.nma <- function(method="common", link="identity") {
                     "prec[i,k] <- pow(se[i,k], -2)",
                     "theta[i,k] <- mu[i] + delta[i,k]"
     )
-  } else if (link=="rom") {
+  } else if (link=="log") {
     arm.insert <- c("y[i,k] ~ dnorm(theta[i,k], prec[i,k])",
                     "prec[i,k] <- pow(se[i,k], -2)",
                     "log(theta[i,k]) <- mu[i] + delta[i,k]"
@@ -1184,4 +1231,169 @@ write.nma <- function(method="common", link="identity") {
                         x=te.insert)
 
   return(model)
+}
+
+
+
+
+
+
+#' Write non-parametric random walk model JAGS code
+#'
+#' Writes JAGS code for a Bayesian non-parametric model that splits the
+#' data into different time-bins and assumes a random walk process for treatment
+#' effects between them.
+#'
+#' @param method A character object that can take the value `"common"` or `"random"` that
+#'   specifies the the type of pooling to use for synthesis.
+#' @inheritParams mb.run
+#'
+#' @return A single long character string containing the JAGS model generated
+#'   based on the arguments passed to the function.
+#'
+#' @examples
+#' # Write a common effects non-paramtric random walk model
+#' write.rw(method="common")
+#'
+#' @noRd
+write.rw <- function(method="common", link="identity") {
+
+  model <- c(
+    "model{ \t\t\t# Begin Model Code",
+    "d[1] <- 0",
+    "",
+    "for(i in 1:NS){ # Run through all NS trials",
+    "mu[i,1] ~ dnorm(0,0.0001)",
+    "delta[i,1,1] <- 0",
+    "for (k in 1:narm[i]){ # Run through all arms within a study",
+    "for (m in 1:nbin) { # Run through each bin",
+    "y[i,k,m] ~ dnorm(theta[i,k,m], prec[i,k,m])",
+    "prec[i,k,m] <- pow(se[i,k,m], -2)",
+    "theta[i,k,m] <- mu[i,m] + delta[i,k,m]",
+    "dev[i,k,m] <- pow((y[i,k,m] - theta[i,k,m]),2) * prec[i,k,m] # residual deviance for normal likelihood",
+    "}",
+    "",
+    "resdev[i,k] <- sum(dev[i,k, 1:nbin])",
+    "}",
+    "",
+    "for (m in 2:nbin) { # Run through each bin",
+    "delta[i,1,m] <- 0",
+    "mu[i,m] ~ dnorm(mu[i,m-1],tau.rw)",
+    "",
+    "for(k in 2:narm[i]){ # Treatment effects",
+    "delta[i,k,m] ~ dnorm(delta[i,k,m-1],tau.rw)",
+    "}",
+    "}",
+    "",
+    "resstudydev[i] <- sum(resdev[i, 1:narm[i]])",
+    "",
+
+    # Common effects
+    "for(k in 2:narm[i]){ # Treatment effects",
+    "delta[i,k,1] <- md[i,k]",
+    "md[i,k] <- d[treat[i,k]] - d[treat[i,1]]",
+    "}",
+
+    # # Random effects
+    # "for(k in 2:narm[i]){ # Treatment effects",
+    # "delta[i,k,1] ~ dnorm(md[i,k], taud[i,k])",
+    # "md[i,k] <- d[treat[i,k]] - d[treat[i,1]] + sw[i,k]",
+    # "taud[i,k] <- tau *2*(k-1)/k",
+    # "w[i,k] <- (delta[i,k,1] - d[treat[i,k]] + d[treat[i,1]])",
+    # "sw[i,k] <- sum(w[i,1:(k-1)])/(k-1)",
+    # "}",
+
+    "",
+    "}",
+    "",
+    "for (k in 2:NT){ # Priors on relative treatment effects",
+    "d[k] ~ dnorm(0,0.0001)",
+    "}",
+    "totresdev <- sum(resstudydev[])",
+    "",
+    "tau.rw <- pow(sd.rw,-2)",
+    "sd.rw ~ dnorm(0,0.05) T(0,)",
+    "",
+
+    "tau <- pow(sd,-2)",
+    "sd ~ dnorm(0,0.05) T(0,)",
+    "# Model ends",
+    "}"
+    )
+
+
+return(model)
+}
+
+
+
+
+#' Sets default priors for JAGS model code
+#'
+#' This function creates JAGS code snippets for default MBNMA model priors.
+#'
+#' @inheritParams mb.run
+#'
+#' @return A list, each element of which is a named JAGS snippet
+#'   corresponding to a prior in the MBNMA JAGS code.
+#'
+#' @examples
+#' \donttest{
+#' default.priors(fun=temax())
+#'
+#' default.priors(fun=titp(p.expon=TRUE))
+#' }
+#'
+#' @export
+default.priors <- function(fun=tloglin()) {
+
+  sufparams <- which(fun$apool=="rel")
+
+  priors <- list(
+    rho = "rho ~ dunif(0,1)",
+    alpha = "alpha[i] ~ dnorm(0,0.0001)",
+    inv.R = "inv.R ~ dwish(omega[,], mat.size)",
+    rhoparam = "rhoparam ~ dunif(-1,1)"
+  )
+
+  for (i in 1:4) {
+    priors[[paste0("mu.",i)]] <- paste0("mu.", i, "[i] ~ dnorm(0,0.0001)")
+    priors[[paste0("m.mu.",i)]] <- paste0("mu.", i, " ~ dnorm(0,0.0001)")
+    priors[[paste0("d.",i)]] <- paste0("d.", i, "[k] ~ dnorm(0,0.001)")
+    priors[[paste0("dume.",i)]] <- paste0("d.", i, "[c,k] ~ dnorm(0,0.001)")
+    priors[[paste0("D.",i)]] <- paste0("D.", i, "[k] ~ dnorm(0,0.001)")
+    priors[[paste0("beta.",i)]] <- paste0("beta.", i, " ~ dnorm(0,0.0001)")
+
+    priors[[paste0("sd.mu.",i)]] <- paste0("sd.mu.", i, " ~ dnorm(0,0.05) T(0,)")
+    priors[[paste0("sd.d.",i)]] <- paste0("sd.d.", i, " ~ dnorm(0,0.05) T(0,)")
+    priors[[paste0("sd.D.",i)]] <- paste0("sd.D.", i, " ~ dnorm(0,0.05) T(0,)")
+    priors[[paste0("sd.beta.",i)]] <- paste0("sd.beta.", i, " ~ dnorm(0,0.05) T(0,)")
+  }
+
+  if ((fun$name %in% c("itp") | (fun$name %in% "emax"))) {
+
+    for (i in 2:3) {
+      priors[[paste0("mu.",i)]] <- paste0("mu.", i, "[i] ~ dnorm(0.00001,0.0001) T(0,)")
+      priors[[paste0("m.mu.",i)]] <- paste0("mu.", i, " ~ dnorm(0.00001,0.0001) T(0,)")
+      priors[[paste0("d.",i)]] <- paste0("d.", i, "[k] ~ dnorm(0.00001,0.001) T(0,)")
+      priors[[paste0("dume.",i)]] <- paste0("d.", i, "[c,k] ~ dnorm(0.00001,0.001) T(0,)")
+      priors[[paste0("D.",i)]] <- paste0("D.", i, "[k] ~ dnorm(0.00001,0.001) T(0,)")
+      priors[[paste0("beta.",i)]] <- paste0("beta.", i, " ~ dnorm(0.00001,0.0001) T(0,)")
+    }
+  }
+
+  # For rho correlation between parameters
+  for (i in seq_along(sufparams)) {
+
+    if (((fun$name %in% c("itp") | (fun$name %in% "emax"))) & sufparams[i] %in% c(2:3)) {
+      priors[[paste0("mu.z.",sufparams[i])]] <- paste0("mu.z[i,", i, "] ~ dnorm(0,0.0001) T(-d.prior[", i, "],)")
+      priors[[paste0("z.",sufparams[i])]] <- paste0("z[", i, ",k] ~ dnorm(0,0.0001) T(-d.prior[", i, "],)")
+
+    } else {
+      priors[[paste0("mu.z.",sufparams[i])]] <- paste0("mu.z[i,", i, "] ~ dnorm(0,0.0001)")
+      priors[[paste0("z.",sufparams[i])]] <- paste0("z[", i, ",k] ~ dnorm(0,0.0001)")
+    }
+  }
+
+  return(priors)
 }

@@ -14,7 +14,7 @@
 #' present in a standard Network Meta-Analysis (NMA). All models and analyses are implemented
 #' in a Bayesian framework, following an extension of the standard NMA methodology presented by
 #' \insertCite{lu2004}{MBNMAtime} and are run in JAGS \insertCite{jags}{MBNMAtime}. Correlation between
-#' time-points can be accounted for in the mdoelling framework. For full details of time-course MBNMA
+#' time-points can be accounted for in the modelling framework. For full details of time-course MBNMA
 #' methodology see \insertCite{pedder2019;textual}{MBNMAtime}.
 #'
 #' @section Workflow:
@@ -24,7 +24,7 @@
 #' 2. Specify a suitable time-course function and analyse your data using \code{\link{mb.run}}
 #' 3. Test for consistency using \code{\link{mb.nodesplit}} or by fitting Unrelated Mean Effects models
 #' 4. Examine model results using forest plots and treatment rankings
-#' 5. Use your model to predict responses using \code{\link{predict.mbnma}}
+#' 5. Use your model to predict responses or estimate treatment effects at specific time-points using \code{\link{predict.mbnma}}
 #'
 #' At each of these stages there are a number of informative plots that can be generated to help make sense of your data and the models that you are fitting.
 #'
@@ -55,18 +55,23 @@
 #' # Generate a forest plot for model results
 #' plot(result)
 #'
-#' # Predict responses
+#' decision.treats <- c("Pl_0", "Ce_100", "Lu_400", "Ro_125",
+#'   "Na_1000", "Na_1500", "Et_10")
+#'
+#' # Predict responses for selected treatments
 #' pred <- predict(result, time=c(0:10), E0=8,
+#'   treats=decision.treats,
 #'   ref.resp=subset(osteopain, treatment=="Pl_0"))
 #'
 #' # Plot predicted response
 #' plot(pred, disp.obs=TRUE)
 #'
 #' # Rank by Area Under the time-course Curve
-#' ranks <- rank(result, param="auc", lower_better=TRUE, n.iter=500)
+#' ranks <- rank(result, param="auc", lower_better=TRUE, n.iter=500,
+#'   treats=decision.treats)
 #'
-#' # Plot histogram of rankings
-#' plot(ranks)
+#' plot(ranks) # Plot histogram of rankings
+#' cumrank(ranks) # Plot cumulative rankograms
 #' }
 #'
 #' @keywords internal

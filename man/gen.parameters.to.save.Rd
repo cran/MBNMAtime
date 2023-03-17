@@ -2,16 +2,19 @@
 % Please edit documentation in R/run.functions.R
 \name{gen.parameters.to.save}
 \alias{gen.parameters.to.save}
-\title{Automatically generate parameters to save for a dose-response MBNMA model}
+\title{Automatically generate parameters to save for a time-course MBNMA model}
 \usage{
 gen.parameters.to.save(fun, model)
 }
 \arguments{
 \item{fun}{An object of class \code{"timefun"} generated (see Details) using any of
-\code{tloglin()}, \code{tpoly()}, \code{texp()}, \code{temax()}, \code{tfpoly()}, \code{tspline()} or \code{tuser()}}
+\code{tloglin()}, \code{tpoly()}, \code{titp()}, \code{temax()}, \code{tfpoly()}, \code{tspline()} or \code{tuser()}}
 
 \item{model}{A JAGS model written as a character object}
 }
+\value{
+A character vector of parameter names that should be monitored in the model
+}
 \description{
-Automatically generate parameters to save for a dose-response MBNMA model
+Automatically generate parameters to save for a time-course MBNMA model
 }

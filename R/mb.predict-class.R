@@ -15,10 +15,14 @@
 #'   plot (`TRUE`) or not (`FALSE`). The network reference treatment (treatment
 #'   1) must be included in `predict` for this to display the network reference
 #'   treatment properly.
-#' @param overlay.nma Can be used to overlay the predicted results from a standard NMA model that
-#'   "lumps" time-points together within the range specified in `overlay.nma`. Must be a numeric vector of length 2, or
-#'   left as `NULL` (the default) to indicate no NMA should be performed. `overlay.nma` can only be specified if
-#'   `overlay.ref==TRUE`. See Details for further information.
+#' @param overlay.nma Numeric vector used to overlay the results from a standard NMA model that
+#'   "lumps" time-points together within the time bin ranges specified in `overlay.nma`.
+#'   The numbers in `overlay.nma` define the boundaries of the time bins within which to perform
+#'   a standard NMA. Length must be >=2, or can be left as `NULL` (the default) to indicate that no NMA
+#'   should be performed. `overlay.nma` can only be specified if `overlay.ref==TRUE`.
+#'   See Details for further information.
+#' @param plot.bins Plot time bin boundaries as vertical dashed lines. Setting `plot.bins=TRUE` if `overlay.nma`
+#'   is specified also sets x-axis ticks to time bin boundaries automatically.
 #' @param method Can take `"common"` or `"random"` to indicate the type of NMA model used to synthesise data points
 #'   given in `overlay.nma`. The default is `"random"` since this assumes different
 #'   time-points in `overlay.nma` have been lumped together to estimate the NMA.
@@ -29,8 +33,13 @@
 #'   used. This allows consistency of shading between multiple plotted graphs.
 #'   It should always be at least as high as the maximum count of observations
 #'   plotted
-#' @param ... Arguments for `ggplot()`
+#' @param ... Arguments for `ggplot()` or `R2jags()`
 #' @inheritParams plot.mb.rank
+#'
+#' @return An object of class `"mb.predict"`. The returned object is a list containing
+#'   a summary of the posterior distribution of predictions, a matrix of MCMC samples
+#'   of the predictions, the `"mb.network"` object on which the model was run, and details
+#'   regarding the times and link function used for the predictions.
 #'
 #' @details For the S3 method `plot()`, if `disp.obs` is set to `TRUE` it is
 #'   advisable to ensure predictions in `predict` are estimated using an even
@@ -39,9 +48,21 @@
 #'   each panel rather than to the network reference treatment if `disp.obs` is
 #'   set to `TRUE`.
 #'
-#'   `overlay.nma` can be useful to assess if the MBNMA predictions are in agreement with predictions from an NMA model
-#'   for a specific range of time-points. This can be a general indicator of the fit of the time-course model. However, it
-#'   is important to note that the wider the range specified in `overlay.nma`, the more likely it is that different time-points
+#' @section Overlaying NMA results:
+#'
+#'   `overlay.nma` indicates regions of the data (defined as "time bins") over which it may be reasonable to "lump" different
+#'   follow-up times from different studies together and assume a standard NMA model. For example:
+#'
+#'   * `overlay.nma=c(5,10)` indicates a single NMA of studies with follow-up times `>5` and `<=10`
+#'   * `overlay.nma=c(5,10,15)` indicates two NMAs should be performed of studies with follow-up times `>5` and `<=10`
+#'   of studies with follow-up times `>10` and `<=15`
+#'
+#'   When used with MBNMA (via `predict.mbnma()`) this allows comparison to MBNMA results over a specific range of time within each time bin.
+#'   It can be useful to assess which time-course function might be suitable when using `binplot()`, or to
+#'   to assess if the MBNMA predictions are in agreement with predictions from an NMA model when using `plot.mb.predict()`
+#'   for a specific range of time-points. This can be a general indicator of the fit of the time-course model.
+#'
+#'   However, it is important to note that the wider the range specified in `overlay.nma`, the more likely it is that different time-points
 #'   are included, and therefore that there is greater heterogeneity/inconsistency in the NMA model. If `overlay.nma` includes
 #'   several follow-up times for any study then only a single time-point will be taken (the one closest to `mean(overlay.nma)`).
 #'   The NMA predictions are plotted over the range specified in `overlay.nma` as a horizontal line, with the 95%CrI shown by a grey
@@ -49,9 +70,13 @@
 #'   all these time-points. Predictions for treatments that are disconnected from
 #'   the network reference treatment at data points specified within `overlay.nma` cannot be estimated so are not included.
 #'
-#'   It is important to note that the NMA model is not necessarily the "correct" model, since it "lump" different time-points
+#'   It is important to note that the NMA model is not necessarily the "correct" model, since it "lumps" different time-points
 #'   together and ignores potential differences in treatment effects that may arise from this. The wider the range specified in
 #'   `overlay.nma`, the greater the effect of "lumping" and the stronger the assumption of similarity between studies.
+#'
+#'   For an NMA model to be estimated and a corresponding prediction to be made from it, **each** time bin
+#'   must include the network reference treatment (treatment=1) evaluated in at least 1 connected study in the time bin.
+#'   If a given time bin does not meet this criteria then an NMA will not be calculated for it.
 #'
 #' @examples
 #' \donttest{
@@ -75,22 +100,23 @@
 #' #on the plot
 #' plot(predict, disp.obs=FALSE, overlay.ref=TRUE)
 #'
-#' # Plot predictions from an NMA calculated between different time-points
+#' # Plot predictions from NMAs calculated between different time-points
 #' plot(predict, overlay.nma=c(5,10), n.iter=20000)
-#' plot(predict, overlay.nma=c(15,20), n.iter=20000)
-#' # Time-course fit may be less good at 15-20 weeks follow-up
+#' plot(predict, overlay.nma=c(5,10,15,20), n.iter=20000)
+#' # Time-course fit may be less well at 15-20 weeks follow-up
 #' }
 #'
 #' @export
 plot.mb.predict <- function(x, disp.obs=FALSE, overlay.ref=TRUE,
                             overlay.nma=NULL, method="random",
-                            col="blue", max.col.scale=NULL, treat.labs=NULL, ...) {
+                            col="blue", max.col.scale=NULL, treat.labs=NULL, plot.bins=TRUE, ...) {
 
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(x, "mb.predict", add=argcheck)
   checkmate::assertLogical(disp.obs, len=1, add=argcheck)
   checkmate::assertLogical(overlay.ref, len=1, add=argcheck)
+  checkmate::assertNumeric(overlay.nma, null.ok=TRUE, lower=0, sorted = TRUE, add=argcheck)
   checkmate::assertChoice(method, choices = c("common", "random"), add=argcheck)
   checkmate::reportAssertions(argcheck)
 
@@ -146,20 +172,17 @@ plot.mb.predict <- function(x, disp.obs=FALSE, overlay.ref=TRUE,
 
   # Overlay reference treatment effect
   if (overlay.ref==TRUE) {
-    g <- g + ggplot2::geom_line(ggplot2::aes(y=ref.median, colour="Predicted reference"), size=1)
+    g <- g + ggplot2::geom_line(ggplot2::aes(y=ref.median, colour="Predicted reference"), linewidth=0.8)
     message(paste0("Reference treatment in plots is ", ref.treat))
   }
   colorvals <- c("Predicted reference"="red")
 
   # Add overlayed lines and legends
   g <- g + ggplot2::geom_line(ggplot2::aes(linetype="Predicted MBNMA")) +
-    ggplot2::geom_line(ggplot2::aes(y=`2.5%`, linetype="MBNMA 95% CrI")) +
-    ggplot2::geom_line(ggplot2::aes(y=`97.5%`, linetype="MBNMA 95% CrI"))
-
+    ggplot2::geom_line(ggplot2::aes(y=`2.5%`, linetype="MBNMA 95% Interval")) +
+    ggplot2::geom_line(ggplot2::aes(y=`97.5%`, linetype="MBNMA 95% Interval"))
 
   if (!is.null(overlay.nma)) {
-    # CHECKS
-    checkmate::assertNumeric(overlay.nma, lower=0.0001, upper = max(x$times), len=2, sorted = TRUE)
 
     if (overlay.ref!=TRUE) {
       stop("'overlay.ref' must be TRUE if overlay.nma is used, to ensure prediction of reference treatment response is correct")
@@ -171,37 +194,61 @@ plot.mb.predict <- function(x, disp.obs=FALSE, overlay.ref=TRUE,
     }
 
     # Run split NMA
-    nma <- overlay.nma(x, incl.range=overlay.nma, method=method, link=x$link, ...)
+    nma <- overlay.nma(x, timebins=overlay.nma, method=method, link=x$link, lim=x$lim, plottype = "pred",
+                       ...)
 
-    predtrt <- nma$pred.df
+    predlist <- list()
 
-    # Write caption
-    capt <- paste0(" effects NMA model\nResDev = ", nma$totresdev,
-                   "; Ndat = ", nma$ndat,
-                   "; DIC = ", nma$dic)
-    if (method=="common") {
-      capt <- paste0("Common", capt)
-    } else if (method=="random") {
-      capt <- paste0("Random", capt, "\nBetween-study SD = ", nma$sd)
+    capt <- "" # Ensure variable is present to avoid error
+
+    for (bin in seq_along(nma)) {
+
+      predtrt <- nma[[bin]]$pred.df
+
+      # Write caption
+      if (length(overlay.nma)==2) {
+        capt <- paste0(" effects NMA model\nResDev = ", nma[[bin]]$totresdev,
+                       "; Ndat = ", nma[[bin]]$ndat,
+                       "; DIC = ", nma[[bin]]$dic)
+        if (method=="common") {
+          capt <- paste0("Common", capt)
+        } else if (method=="random") {
+          capt <- paste0("Random", capt, "\nBetween-study SD = ", nma[[bin]]$sd)
+        }
+      } else {
+        capt <- "Results for each NMA in overlay.nma are stored in output"
+      }
+
+      g <- g + ggplot2::geom_rect(ggplot2::aes(ymin=`2.5%`, ymax=`97.5%`, xmin=tmin, xmax=tmax,
+                                               fill="NMA (95% Interval)"),
+                                  data=predtrt) +
+        ggplot2::geom_segment(ggplot2::aes(y=`50%`, yend=`50%`, x=tmin, xend=tmax, color="Predicted NMA"),
+                              data=predtrt, linewidth=0.8)
+
+      colorvals <- c("Predicted reference"="red", "Predicted NMA"="gray0")
+
+      if (plot.bins==TRUE) {
+        capt <- paste0(capt, "\nVertical dashed lines indicate time bin boundaries")
+
+        g <- g + ggplot2::geom_vline(xintercept=overlay.nma, linetype="dashed", alpha=0.5)
+
+        if (bin==1) {
+          g <- g + ggplot2::scale_x_continuous(breaks=unique(c(0, overlay.nma)))
+        }
+      }
+
     }
 
-    g <- g + ggplot2::geom_rect(ggplot2::aes(ymin=`2.5%`, ymax=`97.5%`, xmin=overlay.nma[1], xmax=overlay.nma[2],
-                                             fill="NMA (95%CrI)"),
-                                alpha=0.8, data=predtrt) +
-      ggplot2::geom_segment(ggplot2::aes(y=`50%`, yend=`50%`, x=overlay.nma[1], xend=overlay.nma[2], color="Predicted NMA"),
-                            data=predtrt, size=1) +
+    g <- g +
       ggplot2::labs(caption=capt) +
-      ggplot2::scale_fill_manual(name="", values=c("NMA (95%CrI)"="grey"))
-
-    colorvals <- c("Predicted reference"="red", "Predicted NMA"="gray0")
-
+      ggplot2::scale_fill_manual(name="", values=c("NMA (95% Interval)"="lightblue"))
   }
 
   g <- g + ggplot2::facet_wrap(~factor(treat)) +
     ggplot2::labs(y="Predicted response", x="Time")
 
   linetypevals <- c("Predicted MBNMA"="solid",
-                    "MBNMA 95% CrI"="dashed")
+                    "MBNMA 95% Interval"="dashed")
   g <- g + ggplot2::scale_linetype_manual(name="",
                                           values=linetypevals)
 
@@ -209,7 +256,14 @@ plot.mb.predict <- function(x, disp.obs=FALSE, overlay.ref=TRUE,
                                        values=colorvals) +
     theme_mbnma()
 
-  return(g)
+  graphics::plot(g)
+
+  out <- list("graph"=g)
+
+  if (!is.null(overlay.nma)) {
+    out[["overlay.nma"]] <- nma
+  }
+  return(invisible(out))
 }
 
 
@@ -220,6 +274,8 @@ plot.mb.predict <- function(x, disp.obs=FALSE, overlay.ref=TRUE,
 #'
 #' @param x An object of `class("mb.predict")` generated by `predict.mbnma()`
 #' @param ... further arguments passed to or from other methods
+#'
+#' @return Prints posterior mean predictions to the console
 #'
 #' @export
 print.mb.predict <- function(x, ...) {

@@ -30,7 +30,7 @@
 #'   the prediction
 #'
 #'   @noRd
-get.model.vals <- function(mbnma, E0=0, level="treatments") {
+get.model.vals <- function(mbnma, E0=0, level="treatments", lim="cred") {
 
   # Check that correct parameters are monitored
   genparams <- gen.parameters.to.save(fun=mbnma$model.arg$fun, model=mbnma$model.arg$jagscode)
@@ -65,19 +65,19 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
 
   for (i in seq_along(params)) {
     if ("abs" %in% fun$apool[i]) {
-      if ("common" %in% fun$amethod[i]) {
+      if ("common" %in% fun$amethod[i] | lim=="cred") {
         # Store matrix of MCMC iterations to list
         model.vals[[fun$bname[i]]] <-
           sims.matrix[,grepl(paste0("^", params[i]), colnames(sims.matrix))]
 
         # Add beta parameters to the vector of time-course parameters
         time.params <- append(time.params, fun$bname[i])
-      } else if ("random" %in% fun$amethod[i]) {
+      } else if ("random" %in% fun$amethod[i] & lim=="pred") {
         # Store matrix of beta values generated from random distribution determined by model parameters
         len <- sum(grepl(paste0("^", params[i]), colnames(sims.matrix)))
         mat <- array(dim=c(n, len, 2))
         mat[,,1] <- sims.matrix[,grepl(paste0("^", params[i]), colnames(sims.matrix))]
-        mat[,,2] <- sims.matrix[,grepl(paste0("^sd\\.", params[i]), colnames(sims.matrix))]
+        mat[,,2] <- stats::median(sims.matrix[,grepl(paste0("^sd\\.", params[i]), colnames(sims.matrix))])
         mat <- apply(mat, MARGIN=c(1,2), FUN=function(x) stats::rnorm(1, x[1], x[2]))
 
         model.vals[[fun$bname[i]]] <- mat
@@ -85,8 +85,12 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
         # Add beta parameters to the vector of time-course parameters
         time.params <- append(time.params, fun$bname[i])
 
-      } else if (is.numeric(fun$amethod[i])) {
-        stop(paste0("Common time-course parameter for", params[i], " currently not supported for prediction"))
+      } else if (grepl("[0-9]", fun$amethod[i])) {
+
+        model.vals[[fun$bname[i]]] <- sims.matrix[,names(fun$bname)[i]]
+
+        # Add beta parameters to the vector of time-course parameters
+        time.params <- append(time.params, fun$bname[i])
       }
     } else if ("rel" %in% fun$apool[i]) {
 
@@ -116,11 +120,11 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
             mcmcmat <- cbind(mcmcmat, matrix(rep(mat[,k], tperc[k]), ncol=tperc[k]))
           }
 
-          if ("random" %in% mbnma$model.arg$class.effect[[params[i]]]) {
+          if ("random" %in% mbnma$model.arg$class.effect[[params[i]]] & lim=="pred") {
             # Store matrix of beta values generated from random distribution determined by model parameters
             mcmcarray <- array(dim=c(n, ncol(mcmcmat), 2))
             mcmcarray[,,1] <- mcmcmat
-            mcmcarray[,,2] <- sims.matrix[,grepl(paste0("^sd\\.", substr(findd, 2, nchar(findd))), colnames(sims.matrix))]
+            mcmcarray[,,2] <- stats::median(sims.matrix[,grepl(paste0("^sd\\.", substr(findd, 2, nchar(findd))), colnames(sims.matrix))])
             mcmcarray[,2:ncol(mcmcmat),] <-
               apply(mcmcarray[,2:ncol(mcmcmat),], MARGIN=c(1,2), FUN=function(x) stats::rnorm(1, x[1], x[2]))
 
@@ -133,15 +137,15 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
 
         if (level=="classes") {
 
-          if ("common" %in% mbnma$model.arg$class.effect[[params[i]]]) {
+          if ("common" %in% mbnma$model.arg$class.effect[[params[i]]] | lim=="cred") {
             # Store MCMC results for relevant parameters
             model.vals[[paste0("d.", i)]] <- sims.matrix[,grepl(findd, colnames(sims.matrix))]
-          } else if ("random" %in% mbnma$model.arg$class.effect[[params[i]]]) {
+          } else if ("random" %in% mbnma$model.arg$class.effect[[params[i]]] & lim=="pred") {
             # Store matrix of beta values generated from random distribution determined by model parameters
             len <- sum(grepl(findd, colnames(sims.matrix)))
             mat <- array(dim=c(n, len, 2))
             mat[,,1] <- sims.matrix[,grepl(findd, colnames(sims.matrix))]
-            mat[,,2] <- sims.matrix[,grepl(paste0("^sd\\.", substr(findd, 2, nchar(findd))), colnames(sims.matrix))]
+            mat[,,2] <- stats::median(sims.matrix[,grepl(paste0("^sd\\.", substr(findd, 2, nchar(findd))), colnames(sims.matrix))])
             mat[,2:len,] <- apply(mat[,2:len,], MARGIN=c(1,2), FUN=function(x) stats::rnorm(1, x[1], x[2]))
 
             model.vals[[paste0("d.", i)]] <- mat[,,1]
@@ -153,18 +157,18 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
         time.params <- append(time.params, paste0("d.", i))
         findd <- ifelse(grepl("beta", params[i]), paste0("^d\\.", i), paste0("^", params[i]))
 
-        if ("common" %in% fun$amethod[i]) {
+        if ("common" %in% fun$amethod[i] | lim=="cred") {
 
           # Store MCMC results for relevant parameters
           model.vals[[paste0("d.", i)]] <- sims.matrix[,grepl(findd, colnames(sims.matrix))]
 
-        } else if ("random" %in% fun$amethod[i]) {
+        } else if ("random" %in% fun$amethod[i] & lim=="pred") {
 
           # Store matrix of beta values generated from random distribution determined by model parameters
           len <- sum(grepl(findd, colnames(sims.matrix)))
           mat <- array(dim=c(n, len, 2))
           mat[,,1] <- sims.matrix[,grepl(findd, colnames(sims.matrix))]
-          mat[,,2] <- sims.matrix[,grepl(paste0("^sd\\.", params[i]), colnames(sims.matrix))]
+          mat[,,2] <- stats::median(sims.matrix[,grepl(paste0("^sd\\.", params[i]), colnames(sims.matrix))])
           mat[,2:len,] <- apply(mat[,2:len,], MARGIN=c(1,2), FUN=function(x) stats::rnorm(1, x[1], x[2]))
 
           model.vals[[paste0("d.", i)]] <- mat[,,1]
@@ -246,7 +250,7 @@ get.model.vals <- function(mbnma, E0=0, level="treatments") {
 #' }
 #'
 #' @export
-ref.synth <- function(data.ab, mbnma, synth="common",
+ref.synth <- function(data.ab, mbnma, synth="random",
                       link=mbnma$model.arg$link,
                       n.iter=mbnma$BUGSoutput$n.iter,
                       n.burnin=mbnma$BUGSoutput$n.burnin,
@@ -287,9 +291,14 @@ ref.synth <- function(data.ab, mbnma, synth="common",
 
   # Identify if data.ab contains cfb and specify intercept
   message("Studies reporting change from baseline automatically identified from ref.resp")
-  cfb.df <- data.ab %>% subset(fupcount==1) %>%
+  cfb.df <- data.ab %>% dplyr::arrange(studyID, time) %>%
+    dplyr::group_by(studyID) %>%
+    dplyr::mutate(fupcount=sequence(dplyr::n())) %>%
+    dplyr::ungroup() %>%
+    subset(fupcount==1) %>%
     dplyr::mutate(cfb=dplyr::case_when(time==0 ~ FALSE,
                                        time!=0 ~ TRUE))
+
   cfb <- cfb.df$cfb
   if (all(cfb==TRUE)) {
     intercept <- FALSE
@@ -342,9 +351,13 @@ ref.synth <- function(data.ab, mbnma, synth="common",
 #' Checks the validity of ref.resp if given as data frame
 #'
 #' Ensures `ref.resp` takes the correct form to allow for synthesis of network
-#' reference treatment response if data is provided for meta-analysis
+#' reference treatment effect if data is provided for meta-analysis
 #'
 #' @inheritParams ref.synth
+#'
+#' @return Returns `data.ab`, the data frame used to estimate the network reference treatment
+#' time-course function, with additional required indices added.
+#'
 ref.validate <- function(data.ab) {
 
   argcheck <- checkmate::makeAssertCollection()
@@ -405,4 +418,41 @@ absdist <- function(mbnma) {
     }
   }
   return(absprior)
+}
+
+
+
+
+
+#' @noRd
+prepare.ume.predict <- function(mbnma, treats, level="treatment") {
+
+  checkmate::assertCharacter(treats, len=2)
+
+  if (FALSE %in% mbnma$model.arg$UME) {
+    stop("object is not a UME model")
+  }
+  if (level=="class") {
+    stop("UME and class models do not mix :-(")
+  }
+
+  umetag <- which(mbnma$network$treatments %in% treats)
+  umetag <- paste0("\\[1\\,[0-9]+\\]")
+
+  tag <- which(mbnma$network$treatments %in% treats[2])
+  tag <- paste0("\\[[0-9]+\\]")
+
+  params <- mbnma$model.arg$fun$params
+
+  keep <- c("^sd", paste0(c("^sd\\.beta\\."), 1:4), paste0(params, tag), paste0(params, umetag))
+
+  ind <- vector()
+  for (i in seq_along(keep)) {
+    ind <- append(ind, grep(keep[i], colnames(mbnma$BUGSoutput$sims.matrix)))
+  }
+
+  mbnma$BUGSoutput$sims.matrix <-
+    mbnma$BUGSoutput$sims.matrix[,ind]
+
+  return(mbnma)
 }

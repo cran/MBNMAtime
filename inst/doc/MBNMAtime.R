@@ -65,6 +65,10 @@ timeplot(network.pain)
 network.gout <- mb.network(goutSUA_CFBcomb)
 timeplot(network.gout, level="class", plotby="rel")
 
+## ---- pain.binplot, results="hide"--------------------------------------------
+# Plot results for NMAs performed between 0-5, 5-10, 10-15 and 15-26 weeks
+binplot(network.pain, overlay.nma=c(0,5,10,15,26))
+
 ## ---- results="hide"----------------------------------------------------------
 # Run a linear time-course MBNMA
 mbnma <- mb.run(network.alog, fun=tpoly(degree=1, pool.1="rel", method.1="common"))
@@ -110,35 +114,12 @@ summary(mbnma)
 #                  fun=tloglin(pool.rate="rel", method.rate="random"),
 #                  priors=list(rate="dnorm(0,2) T(0,)"))
 
-## ---- eval=FALSE--------------------------------------------------------------
-#  mbnma <- mb.run(network.pain,
-#                  fun=tspline(type="ls", knots=1,
-#                              pool.1="rel", method.1="random",
-#                              pool.2="rel", method.2="common"),
-#                  omega=matrix(c(10,3,3,1), nrow=2))
-
-## -----------------------------------------------------------------------------
-print(mbnma)
-
-## ---- eval=FALSE--------------------------------------------------------------
-#  # Traceplots
-#  mcmcplots::traplot(mbnma, "sd.beta.1")
-#  
-#  # Running mean plots
-#  mcmcplots::rmeanplot(mbnma, "sd.beta.1")
-#  
-#  # Posterior densities
-#  mcmcplots::denplot(mbnma, "sd.beta.1")
-#  
-#  # Autocorrelation plots
-#  coda::autocorr.plot(mbnma)
-
 ## ---- results="hide", fig.show="hold", eval=FALSE-----------------------------
 #  # Run a first-order fractional polynomial time-course MBNMA
 #  mbnma <- mb.run(network.pain,
 #                  fun=tfpoly(degree=1,
 #                            pool.1="rel", method.1="random",
-#                            method.power1="common"))
+#                            method.power1=0.5))
 #  
 #  # Plot a box-plot of deviance contributions (the default)
 #  devplot(mbnma, n.iter=1000)
@@ -148,7 +129,7 @@ print(mbnma)
 mbnma <- mb.run(network.pain, 
                 fun=tfpoly(degree=1,
                           pool.1="rel", method.1="random",
-                          method.power1="common"), n.iter=5000)
+                          method.power1=0.5), n.iter=5000)
 
 # Plot a box-plot of deviance contributions (the default)
 devplot(mbnma, n.iter=500)
@@ -172,6 +153,9 @@ plot(mbnma)
 allres <- get.relative(mbnma, time=20,
                        treats = c("alog_100", "alog_50", "placebo"))
 print(allres)
+
+## ---- echo=FALSE, results='asis', fig.cap="2-stage MBNMA: For clarity, 95%CrIs are not shown in the plots or tables but these are calculated and computed in `get.relative()`. Thick connecting lines in network plots indicate comparisons with rich time-course data that can be modelled with a more complex function (e.g. B-spline), thin connecting lines in network plots indicate comparisons with sparse time-course data that can only be modelled with a less complex function (e.g. BEST-ITP). Comparisons between treatments in different subnetworks that are not the network reference must be excluded (red dashed line in network plot)."----
+knitr::include_graphics("2stageMBNMA.png", dpi=250)
 
 ## ---- include=FALSE, eval=rmarkdown::pandoc_available("1.12.3")---------------
 load(system.file("extdata", "ranks.rda", package="MBNMAtime", mustWork = TRUE))
@@ -287,8 +271,8 @@ pred.obese <- predict(mbnma, times=c(0:50), E0=100, treats = c(1,4,15),
 plot(pred.obese, disp.obs = TRUE)
 
 ## ---- results="hide", warning=FALSE-------------------------------------------
-# Overlay predictions from lumped NMA between 8-10 weeks follow-up
-plot(pred, overlay.nma=c(8,10), n.iter=20000)
+# Overlay predictions from lumped NMAs between 5-8 and between 8-15 weeks follow-up
+plot(pred, overlay.nma=c(5,8,15), n.iter=20000)
 
 ## ---- warning=FALSE-----------------------------------------------------------
 # Loops of evidence within the alogliptin dataset
@@ -331,14 +315,14 @@ print(splits.alog)
 #                UME="beta.2")
 
 ## ---- echo=FALSE--------------------------------------------------------------
-print("Deviance for mbnma: -110.54")
-print("Deviance for ume on beta.1 and beta.2: -118.16")
-print("Deviance for ume on beta.1: -117.51")
-print("Deviance for uyme on beta.2: -118.04")
+print("Deviance for mbnma: -104.54")
+print("Deviance for ume on beta.1 and beta.2: -115.5")
+print("Deviance for ume on beta.1: -117.0")
+print("Deviance for ume on beta.2: -115.2")
 
 ## ---- include=FALSE-----------------------------------------------------------
 load(system.file("extdata", "nodesplit.rda", package="MBNMAtime", mustWork = TRUE))
-load(system.file("extdata", "ns.exp.rda", package="MBNMAtime", mustWork = TRUE))
+load(system.file("extdata", "ns.itp.rda", package="MBNMAtime", mustWork = TRUE))
 
 ## ---- eval=FALSE, echo=TRUE---------------------------------------------------
 #  # Nodesplit using an Emax MBNMA
@@ -362,16 +346,16 @@ plot(nodesplit, plot.type="forest")
 plot(nodesplit, plot.type="density")
 
 ## ---- eval=FALSE, echo=TRUE---------------------------------------------------
-#  # Nodesplit on emax of 1-parameter exponential MBNMA
-#  ns.exp <- mb.nodesplit(network.pain,
-#                         fun=texp(pool.emax = "rel", method.emax="common"),
+#  # Nodesplit on emax of 1-parameter ITP MBNMA
+#  ns.itp <- mb.nodesplit(network.pain,
+#                         fun=titp(pool.emax = "rel", method.emax="common"),
 #                         nodesplit.parameters="all")
 
 ## ---- echo=FALSE, eval=FALSE, include=FALSE-----------------------------------
-#  save(ns.exp, file="inst/extdata/ns.exp.rda")
+#  save(ns.itp, file="inst/extdata/ns.itp.rda")
 
-## ---- fig.height=2.5----------------------------------------------------------
-print(ns.exp)
+## -----------------------------------------------------------------------------
+print(ns.itp)
 
-plot(ns.exp, plot.type="forest")
+plot(ns.itp, plot.type="forest")
 
