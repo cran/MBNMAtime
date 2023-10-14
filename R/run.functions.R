@@ -25,6 +25,9 @@
 #' @param link Can take either `"identity"` (the default),
 #'   `"log"` (for modelling Ratios of Means \insertCite{friedrich2011}{MBNMAtime}) or
 #'   `"smd"` (for modelling Standardised Mean Differences - although this also corresponds to an identity link function).
+#' @param sdscale Logical object to indicate whether to write a model that specifies a reference SD
+#'  for standardising when modelling using Standardised Mean Differences. Specifying `sdscale=TRUE`
+#'  will therefore only modify the model if link function is set to SMD (`link="smd"`).
 #'
 #' @param rho The correlation coefficient when modelling within-study correlation between time points. The default is a string representing a
 #'   prior distribution in JAGS, indicating that it be estimated from the data (e.g. `rho="dunif(0,1)"`). `rho` also be assigned a
@@ -255,7 +258,7 @@
 #' }
 #' @export
 mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, intercept=NULL,
-                      link="identity",
+                      link="identity", sdscale=FALSE,
                       parameters.to.save=NULL,
                       rho=0, covar="varadj",
                       omega=NULL, corparam=FALSE,
@@ -277,8 +280,6 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
-  message("Change from version 0.2.2 onwards: corparam=FALSE as default")
-
   # Reduce n.burnin by 1 to avoid JAGS error if n.burnin=n.iter
   if (n.iter==n.burnin) {
     n.burnin <- n.burnin - 1
@@ -296,9 +297,22 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
     }
   }
 
+  # Check sdscale and link
+  if (sdscale==TRUE) {
+    if (link!="smd") {
+      sdscale <- FALSE
+    }
+  }
+  if (link=="log") {
+    if (any(network$data.ab$y<0)) {
+      stop("link='log' cannot be used with means (y) that take negative values in network$data.ab")
+    }
+  }
+
 
   if (is.null(model.file)) {
     model <- mb.write(fun=fun, link=link,
+                      sdscale=sdscale,
                       positive.scale=positive.scale, intercept=intercept,
                       rho=rho, covar=covar,
                       class.effect=class.effect, UME=UME,
@@ -306,6 +320,25 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
     )
 
     if (!is.null(priors)) {
+      # Check that order is correct if names in priors match network$treatments
+      for (i in seq_along(priors)) {
+        if (length(priors[[i]])>1) {
+          if (!is.null(names(priors[[i]]))) { # If treatment-specific priors are named
+            if (length(class.effect)>0) {
+              warning("MBNMAtime defaults to treatment-specific priors if multiple priors are specified for a parameter")
+            }
+
+            priornam <- names(priors[[i]])
+
+            # If at least 2 names match those in network$treatments then sort priors to match network order
+            if (sum(priornam %in% network$treatments)>=2) {
+              priors[[i]] <- priors[[i]][match(network$treatments, priornam, nomatch=0)]
+            }
+          }
+        }
+        prior <- priors[[i]]
+      }
+
       model <- replace.prior(priors=priors, model=model)
     }
 
@@ -319,15 +352,6 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
     parameters.to.save <-
       gen.parameters.to.save(fun=fun, model=model)
   }
-
-  # Removed in version 0.2.3
-  # If multiple time-course parameters are relative effects then add omega default
-  # if (is.null(omega)) {
-  #   relparam <- fun$apool %in% "rel" & !names(fun$apool) %in% names(class.effect)
-  #   if (sum(relparam)>1 & corparam==TRUE) {
-  #     omega <- diag(rep(1,sum(relparam)))
-  #   }
-  # }
 
   # Add nodes to monitor to calculate plugin pd
   if (pd=="plugin") {
@@ -355,7 +379,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   data.ab <- network[["data.ab"]]
   result.jags <- mb.jags(data.ab, model, fun=fun, link=link, cfb=network$cfb,
                        class=class, rho=rho, covar=covar, omega=omega,
-                       jagsdata=jagsdata,
+                       jagsdata=jagsdata, sdscale=sdscale,
                        parameters.to.save=parameters.to.save,
                        n.iter=n.iter, n.chains=n.chains,
                        n.burnin=n.burnin, n.thin=n.thin,
@@ -388,7 +412,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
   model.arg <- list("parameters.to.save"=assigned.parameters.to.save,
                     "fun"=fun,
                     "jagscode"=model, "jagsdata"=jagsdata,
-                    "link"=link,
+                    "link"=link, "sdscale"=sdscale,
                     "positive.scale"=positive.scale, "intercept"=intercept,
                     "rho"=rho, "covar"=covar,
                     "class.effect"=class.effect, "UME"=UME,
@@ -397,10 +421,6 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
                     "priors"=get.prior(model))
   result[["model.arg"]] <- model.arg
   result[["network"]] <- network
-  # result[["treatments"]] <- network[["treatments"]]
-  # if ("classes" %in% names(network)) {
-  #   result[["classes"]] <- network[["classes"]]
-  # }
   result[["type"]] <- "time"
 
   if (!("error" %in% names(result))) {
@@ -415,7 +435,7 @@ mb.run <- function(network, fun=tpoly(degree = 1), positive.scale=FALSE, interce
 mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
                        class=FALSE, rho=NULL, covar=NULL,
                        parameters.to.save=parameters.to.save,
-                       cfb=NULL, omega=NULL,
+                       cfb=NULL, omega=NULL, sdscale=FALSE,
                        jagsdata=NULL,
                        warn.rhat=FALSE, ...) {
 
@@ -429,12 +449,16 @@ mb.jags <- function(data.ab, model, fun=NULL, link=NULL,
   checkmate::assertClass(fun, "timefun", add=argcheck)
   checkmate::assertLogical(cfb, null.ok=TRUE, add=argcheck)
   checkmate::assertList(jagsdata, null.ok=TRUE, add=argcheck)
+  checkmate::assertLogical(sdscale, len = 1, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
 
   if (is.null(jagsdata)) {
     # For MBNMAtime
-    jagsdata <- getjagsdata(data.ab, class=class, rho=rho, covstruct=covar, fun=fun, link=link, cfb=cfb) # get data into jags correct format (list("fups", "NT", "NS", "narm", "y", "se", "treat", "time"))
+    jagsdata <- getjagsdata(data.ab, class=class,
+                            rho=rho, covstruct=covar,
+                            fun=fun, link=link, sdscale=sdscale,
+                            cfb=cfb) # get data into jags correct format (list("fups", "NT", "NS", "narm", "y", "se", "treat", "time"))
 
     if (!is.null(omega)) {
       jagsdata[["omega"]] <- omega
@@ -791,6 +815,8 @@ mb.update <- function(mbnma, param="theta",
 
 #' Run an NMA model
 #'
+#' @param treatments A vector of treatment names. If left as `NULL` it will use
+#' the treatment coding given in `data.ab`
 #' @inheritParams mb.network
 #' @inheritParams mb.run
 #' @inheritParams plot.mb.predict
@@ -801,22 +827,30 @@ mb.update <- function(mbnma, param="theta",
 #' network <- mb.network(osteopain)
 #'
 #' # Get the latest time point
-#' df <- get.latest.time(network)
+#' late.time <- get.latest.time(network)
 #'
 #' # Get the closest time point to a given value (t)
-#' df <- get.closest.time(network, t=7)
+#' early.time <- get.closest.time(network, t=7)
 #'
 #' # Run NMA on the data
-#' nma.run(df, method="random")
+#' nma.run(late.time$data.ab, treatments=late.time$treatments,
+#'   method="random")
 #'
 #' @export
-nma.run <- function(data.ab, method="common", link="identity", ...) {
+nma.run <- function(data.ab, treatments=NULL, method="common", link="identity", sdscale=FALSE, ...) {
+
+  # Check sdscale
+  if (sdscale==TRUE) {
+    if (link!="smd") {
+      sdscale <- FALSE
+    }
+  }
 
   # Write NMA model for common/random effects
-  model <- write.nma(method=method, link=link)
+  model <- write.nma(method=method, link=link, sdscale=sdscale)
 
   # Get jags data
-  tempjags <- getnmadata(data.ab, link=link)
+  tempjags <- getnmadata(data.ab, link=link, sdscale=sdscale)
   tempjags[["studyID"]] <- NULL
 
   parameters.to.save <- c("d", "totresdev")
@@ -855,6 +889,13 @@ nma.run <- function(data.ab, method="common", link="identity", ...) {
     return(list("error"=cond))
   }
   )
+
+  if (!is.null(treatments)) {
+    out[["treatments"]] <- treatments
+  } else {
+    out[["treatments"]] <- sort(unique(data.ab$treatment))
+  }
+
   class(out) <- c("nma", "rjags")
 
   return(out)

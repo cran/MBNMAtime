@@ -4,7 +4,9 @@ datalist <- list(osteopain=osteopain, copd=copd, goutSUA_CFBcomb=goutSUA_CFBcomb
                  hyalarthritis=hyalarthritis, diabetes=diabetes, alog_pcfb=alog_pcfb)
 
 n.iter <- 2000
+seed <- 890421
 
+# Iterations start at 2 so that they are compared to osteopain
 for (i in 2:length(datalist)) {
 
   print(names(datalist)[i])
@@ -18,12 +20,12 @@ for (i in 2:length(datalist)) {
     skip_on_appveyor()
 
     if (names(datalist)[i] %in% c("goutSUA_CFBcomb", "hyalarthritis", "alog_pcfb")) {
-      itp <- mb.run(network, tpoly(degree=2), corparam = FALSE, n.iter=n.iter)
+      itp <- mb.run(network, tpoly(degree=2), corparam = FALSE, n.iter=n.iter, jags.seed=seed)
     } else {
-      itp <- mb.run(network, titp(), corparam = FALSE, n.iter=n.iter)
+      itp <- mb.run(network, titp(), corparam = FALSE, n.iter=n.iter, jags.seed=seed)
     }
 
-    loglin <- mb.run(mb.network(datalist[[i-1]]), tloglin(), n.iter=n.iter)
+    loglin <- mb.run(mb.network(datalist[[i-1]]), tloglin(), n.iter=n.iter, jags.seed=seed)
 
     expect_error(get.relative(mbnma=loglin, mbnma.add=itp, time=20),
                  "mbnma and mbnma.add must have a single treatment")
@@ -50,7 +52,7 @@ for (i in 2:length(datalist)) {
 
     netnew <- mb.network(netnew)
 
-    loglin <- mb.run(netnew, tloglin(), n.iter=n.iter)
+    loglin <- mb.run(netnew, tloglin(), n.iter=n.iter, jags.seed=seed)
 
 
     expect_error(get.relative(mbnma=loglin, mbnma.add=itp), NA)
@@ -79,7 +81,7 @@ for (i in 2:length(datalist)) {
                   network$treatments[3])
 
     netref <- mb.network(datalist[[i]], reference=ref)
-    loglin2 <- mb.run(netref, tloglin(), n.iter=n.iter)
+    loglin2 <- mb.run(netref, tloglin(), n.iter=n.iter, jags.seed=seed)
 
 
     # Create new network with same treatment
@@ -100,12 +102,12 @@ for (i in 2:length(datalist)) {
 
     netnew <- mb.network(netnew)
 
-    if (names(datalist)[i-1] %in% c("diabetes")) {
+    if (names(datalist)[i-1] %in% c("diabetes", "hyalarthritis")) {
 
       # WARNING CAN BE REMOVED AFTER v0.2.2
-      itp2 <- suppressWarnings(mb.run(netnew, temax(), corparam = TRUE, n.iter=n.iter))
+      itp2 <- suppressWarnings(mb.run(netnew, temax(), corparam = TRUE, n.iter=n.iter, jags.seed=seed))
     } else {
-      itp2 <- mb.run(netnew, titp(), corparam = TRUE, n.iter=n.iter)
+      itp2 <- mb.run(netnew, titp(), corparam = TRUE, n.iter=n.iter, jags.seed=seed)
     }
 
 

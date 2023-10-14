@@ -42,7 +42,7 @@
 #'
 #' @export
 mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE, intercept=NULL,
-                     rho=0, covar="varadj", omega=NULL, corparam=TRUE,
+                     rho=0, covar="varadj", omega=NULL, corparam=TRUE, sdscale=FALSE,
                      class.effect=list(), UME=FALSE) {
 
 
@@ -72,7 +72,7 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
   }
 
   write.check(fun=fun, positive.scale=positive.scale, intercept=intercept, link=link,
-              rho=rho, covar=covar, omega=omega,
+              rho=rho, covar=covar, omega=omega, sdscale=sdscale,
               class.effect=class.effect, UME=UME)
 
   model <- write.model()
@@ -82,7 +82,8 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
   timecourse <- alphacode[["timecourse"]]
   model <- alphacode[["model"]]
 
-  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar, link=link, fun=fun)
+  model <- write.likelihood(model=model, timecourse=timecourse, rho=rho, covar=covar,
+                            link=link, fun=fun, sdscale=sdscale)
 
   model <- write.beta(model=model, timecourse=timecourse, fun=fun,
                       UME=UME, class.effect=class.effect)
@@ -117,7 +118,7 @@ mb.write <- function(fun=tpoly(degree = 1), link="identity", positive.scale=TRUE
 #'   correlation between time points if it passes.
 #'
 write.check <- function(fun=tpoly(degree=1), positive.scale=TRUE, intercept=NULL, rho=0, covar=NULL,
-                        omega=NULL, link="identity",
+                        omega=NULL, link="identity", sdscale=FALSE,
                         class.effect=list(), UME=c()) {
 
   # Run argument checks
@@ -126,6 +127,7 @@ write.check <- function(fun=tpoly(degree=1), positive.scale=TRUE, intercept=NULL
   checkmate::assertList(class.effect, unique=FALSE, add=argcheck)
   checkmate::assertMatrix(omega, null.ok = TRUE, add=argcheck)
   checkmate::assertClass(fun, "timefun", add = argcheck)
+  checkmate::assertLogical(sdscale, null.ok=FALSE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
 
@@ -332,7 +334,8 @@ model.insert <- function(a, pos, x){
 #' @return A character vector of JAGS MBNMA model code that includes likelihood
 #'   components of the model
 #'
-write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="identity", fun) {
+write.likelihood <- function(model, timecourse, rho=0, covar="varadj",
+                             link="identity", sdscale=FALSE, fun) {
 
   # Likelihoods
   norm.like <- c(
@@ -446,23 +449,14 @@ write.likelihood <- function(model, timecourse, rho=0, covar="varadj", link="ide
   # Add linear predictor
   model <- model.insert(model, pos=which(names(model)=="fup"), x=predictor)
 
-  if (link=="smd") {
-    # smd.sub <- c(
-    #   "sd[i,k,m] <- se[i,k,m] * pow(n[i,k,m],0.5)",
-    #   "nvar[i,k,m] <- (n[i,k,m]-1) * pow(sd[i,k,m],2)"
-    # )
+  if (link=="smd" & sdscale==FALSE) {
+
     smd.sub <- c(
       "sd[i,k] <- se[i,k,1] * pow(n[i,k],0.5)",
       "nvar[i,k] <- (n[i,k]-1) * pow(sd[i,k],2)"
     )
     model <- model.insert(model, pos=which(names(model)=="arm"), x=smd.sub)
 
-    # pool.sd <- c(
-    #   "for (m in 1:fups[i]) {",
-    #   "df[i,m] <- sum(n[i,1:narm[i],m]) - narm[i]",
-    #   "pool.var[i,m] <- sum(nvar[i,1:narm[i],m])/df[i,m]",
-    #   "pool.sd[i,m] <- pow(pool.var[i,m], 0.5)"
-    # )
     pool.sd <- c(
       "df[i] <- sum(n[i,1:narm[i]]) - narm[i]",
       "pool.var[i] <- sum(nvar[i,1:narm[i]])/df[i]",
@@ -898,7 +892,12 @@ get.prior <- function(model) {
   priors <- list()
   for (i in seq_along(priorlist)) {
     priorname <- unlist(strsplit(priorlist[[i]][1], split="\\["))[1]
-    priors[[priorname]] <- priorlist[[i]][2]
+
+    if (priorname %in% names(priors)) {
+      priors[[priorname]] <- append(priors[[priorname]], priorlist[[i]][2])
+    } else {
+      priors[[priorname]] <- priorlist[[i]][2]
+    }
   }
 
   return(priors)
@@ -963,14 +962,38 @@ replace.prior <- function(priors, model=NULL, mbnma=NULL) {
       #   stop("Prior named ", names(priors)[i], " has matched on multiple instances in the model code. Check priors currently present in model code using get.prior()")
     }
 
-    if (!grepl("^d[a-z.]*\\(", priors[[i]])) {
+    if (!all(grepl("^d[a-z.]*\\(", priors[[i]]))) {
       stop("Prior named ", names(priors)[i], " does not follow JAGS distribution syntax\nSee JAGS manual: https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf")
     }
 
-    #line <- grep(paste0("^( +)?", names(priors)[i]), model)
     line <- grep(paste0("^( +)?", names(priors)[i], ".+~"), model)
     state <- model[line]
-    model[line] <- gsub("(^.+~ )(.+$)", paste0("\\1", priors[[i]]), state)
+
+    if (length(priors[[i]])==1) {
+      model[line] <- gsub("(^.+~ )(.+$)", paste0("\\1", priors[[i]]), state)
+
+    } else {
+      # What if length of priors[[i]]>1 ?
+      # Find previous { in code and add priors as new lines there
+
+      # Identifies loop above which to insert
+      insert <- max(grep("\\{", model)[grep("\\{", model) < line])
+
+      # Indentifies starting index in the loop (e.g. from 1: or 2:)
+      loopind <- as.numeric(gsub("\\D", "", model[insert]))
+
+      # Creates vector of priors
+      priors.insert <- paste0(names(priors)[i], "[",
+                              loopind:(length(priors[[i]])+loopind-1),
+                              "] ~ ", priors[[i]])
+
+      # Drop previous prior line
+      model <- model[-line]
+      model <- c(model[1:(insert-1)],
+                 priors.insert,
+                 model[insert:length(model)])
+
+    }
   }
 
   # Cut irrelevant section from JAGS code
@@ -1153,7 +1176,7 @@ write.beta.ref <- function(model, timecourse, fun,
 #' @inheritParams plot.mb.predict
 #'
 #' @noRd
-write.nma <- function(method="common", link="identity") {
+write.nma <- function(method="common", link="identity", sdscale=FALSE) {
   model <- c(
     start="model{ 			# Begin Model Code",
     "d[1] <- 0",
@@ -1178,30 +1201,34 @@ write.nma <- function(method="common", link="identity") {
     "}"
   )
 
+  arm.insert <- c("y[i,k] ~ dnorm(theta[i,k], prec[i,k])",
+                  "prec[i,k] <- pow(se[i,k], -2)")
+
   if (link=="identity") {
-    arm.insert <- c("y[i,k] ~ dnorm(theta[i,k], prec[i,k])",
-                    "prec[i,k] <- pow(se[i,k], -2)",
-                    "theta[i,k] <- mu[i] + delta[i,k]"
-    )
+    arm.insert <- append(arm.insert,
+                         c("theta[i,k] <- mu[i] + delta[i,k]"))
+
   } else if (link=="log") {
-    arm.insert <- c("y[i,k] ~ dnorm(theta[i,k], prec[i,k])",
-                    "prec[i,k] <- pow(se[i,k], -2)",
-                    "log(theta[i,k]) <- mu[i] + delta[i,k]"
-    )
+    arm.insert <- append(arm.insert,
+                         c("log(theta[i,k]) <- mu[i] + delta[i,k]"))
+
   } else if (link=="smd") {
     arm.insert <- c("y[i,k] ~ dnorm(phi[i,k], prec[i,k])",
                     "prec[i,k] <- pow(se[i,k], -2)",
                     "phi[i,k] <- theta[i,k] * pool.sd[i]",
-                    "log(theta[i,k]) <- mu[i] + delta[i,k]",
-                    "sd[i,k] <- se[i,k] * pow(n[i,k],0.5)",
-                    "nvar[i,k] <- (n[i,k]-1) * pow(sd[i,k],2)"
-    )
+                    "theta[i,k] <- mu[i] + delta[i,k]")
 
-    insert <- c("df[i] <- sum(n[i,1:narm[i]]) - narm[i]",
-                "pool.var[i] <- sum(nvar[i,1:narm[i]])/df[i]",
-                "pool.sd[i] <- pow(pool.var[i], 0.5)")
-    model <- model.insert(model, pos=which(names(model)=="start"),
-                          x=insert)
+    if (sdscale==FALSE) {
+      arm.insert <- append(arm.insert, c("sd[i,k] <- se[i,k] * pow(n[i,k],0.5)",
+                                         "nvar[i,k] <- (n[i,k]-1) * pow(sd[i,k],2)"
+                                         ))
+
+      insert <- c("df[i] <- sum(n[i,1:narm[i]]) - narm[i]",
+                  "pool.var[i] <- sum(nvar[i,1:narm[i]])/df[i]",
+                  "pool.sd[i] <- pow(pool.var[i], 0.5)")
+      model <- model.insert(model, pos=which(names(model)=="start"),
+                            x=insert)
+    }
   }
 
   model <- model.insert(model, pos=which(names(model)=="arm"),
@@ -1375,9 +1402,9 @@ default.priors <- function(fun=tloglin()) {
     for (i in 2:3) {
       priors[[paste0("mu.",i)]] <- paste0("mu.", i, "[i] ~ dnorm(0.00001,0.0001) T(0,)")
       priors[[paste0("m.mu.",i)]] <- paste0("mu.", i, " ~ dnorm(0.00001,0.0001) T(0,)")
-      priors[[paste0("d.",i)]] <- paste0("d.", i, "[k] ~ dnorm(0.00001,0.001) T(0,)")
-      priors[[paste0("dume.",i)]] <- paste0("d.", i, "[c,k] ~ dnorm(0.00001,0.001) T(0,)")
-      priors[[paste0("D.",i)]] <- paste0("D.", i, "[k] ~ dnorm(0.00001,0.001) T(0,)")
+      priors[[paste0("d.",i)]] <- paste0("d.", i, "[k] ~ dnorm(0.00001,0.0001) T(0,)")
+      priors[[paste0("dume.",i)]] <- paste0("d.", i, "[c,k] ~ dnorm(0.00001,0.0001) T(0,)")
+      priors[[paste0("D.",i)]] <- paste0("D.", i, "[k] ~ dnorm(0.00001,0.0001) T(0,)")
       priors[[paste0("beta.",i)]] <- paste0("beta.", i, " ~ dnorm(0.00001,0.0001) T(0,)")
     }
   }
