@@ -12,16 +12,17 @@ library(MBNMAtime)
 library(rmarkdown)
 library(knitr)
 library(dplyr)
+library(ggplot2)
 #load(system.file("extdata", "vignettedata.rda", package="MBNMAtime", mustWork = TRUE))
 
-## ---- results="hide", message=FALSE, eval=FALSE-------------------------------
+## ----results="hide", message=FALSE, eval=FALSE--------------------------------
 #  # Run an Emax time-course MBNMA using the osteoarthritis dataset
 #  mbnma <- mb.run(network.pain,
 #                  fun=temax(pool.emax="rel", method.emax="common",
 #                            pool.et50="abs", method.et50="common"),
 #                  rho="dunif(0,1)", covar="varadj")
 
-## ---- results="hide", message=FALSE, echo=FALSE-------------------------------
+## ----results="hide", message=FALSE, echo=FALSE--------------------------------
 # Run an Emax time-course MBNMA using the osteoarthritis dataset
 network.pain <- mb.network(osteopain)
 
@@ -30,7 +31,7 @@ mbnma <- mb.run(network.pain,
                           pool.et50="abs", method.et50="common"),
                 rho="dunif(0,1)", covar="varadj", n.iter=3000)
 
-## ---- results="hide", message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")----
+## ----results="hide", message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")----
 # Specify placebo time-course parameters
 ref.params <- list(emax=-2)
 
@@ -43,7 +44,7 @@ pred <- predict(mbnma, treats=c("Pl_0", "Ce_200", "Du_90", "Et_60",
 
 print(pred)
 
-## ---- results="hide", message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")----
+## ----results="hide", message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")----
 # Generate a dataset of network reference treatment responses over time
 placebo.df <- network.pain$data.ab[network.pain$data.ab$treatment==1,]
 
@@ -56,10 +57,10 @@ pred <- predict(mbnma, treats=c("Pl_0", "Ce_200", "Du_90", "Et_60",
 
 print(pred)
 
-## ---- message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")---------------
+## ----message=FALSE, eval=rmarkdown::pandoc_available("1.12.3")----------------
 plot(pred, overlay.ref=TRUE, disp.obs=TRUE)
 
-## ---- fig.height=3, results="hide", eval=FALSE--------------------------------
+## ----fig.height=3, results="hide", eval=FALSE---------------------------------
 #  # Fit a quadratic time-course MBNMA to the Obesity dataset
 #  network.obese <- mb.network(obesityBW_CFB, reference = "plac")
 #  
@@ -78,7 +79,7 @@ plot(pred, overlay.ref=TRUE, disp.obs=TRUE)
 #  # Plot predictions
 #  plot(pred.obese, disp.obs = TRUE)
 
-## ---- fig.height=3, results="hide", echo=FALSE, message=FALSE-----------------
+## ----fig.height=3, results="hide", echo=FALSE, message=FALSE------------------
 # Fit a quadratic time-course MBNMA to the Obesity dataset
 network.obese <- mb.network(obesityBW_CFB, reference = "plac")
 
@@ -97,7 +98,7 @@ pred.obese <- predict(mbnma, times=c(0:50), E0=100, treats = c(1,4,15),
 # Plot predictions
 plot(pred.obese, disp.obs = TRUE)
 
-## ---- results="hide", warning=FALSE-------------------------------------------
+## ----results="hide", warning=FALSE--------------------------------------------
 # Overlay predictions from lumped NMAs between 5-8 and between 8-15 weeks follow-up
 plot(pred, overlay.nma=c(5,8,15), n.iter=20000)
 

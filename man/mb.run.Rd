@@ -14,17 +14,16 @@ mb.run(
   parameters.to.save = NULL,
   rho = 0,
   covar = "varadj",
-  omega = NULL,
   corparam = FALSE,
   class.effect = list(),
   UME = FALSE,
-  pd = "pv",
   parallel = FALSE,
   priors = NULL,
   n.iter = 20000,
   n.chains = 3,
   n.burnin = floor(n.iter/2),
   n.thin = max(1, floor((n.iter - n.burnin)/1000)),
+  pD = TRUE,
   model.file = NULL,
   jagsdata = NULL,
   ...
@@ -72,14 +71,6 @@ time points \insertCite{jansen2015}{MBNMAtime}. This is the default.
 \href{https://support.sas.com/resources/papers/proceedings/proceedings/sugi30/198-30.pdf}{autoregressive AR1} structure
 }}
 
-\item{omega}{DEPRECATED IN VERSION 0.2.3 ONWARDS (~uniform(-1,1) now used for correlation between parameters
-rather than a Wishart prior).
-A scale matrix for the inverse-Wishart prior for the covariance matrix used
-to model the correlation between time-course parameters (see Details for time-course functions). \code{omega} must
-be a symmetric positive definite matrix with dimensions equal to the number of time-course parameters modelled using
-relative effects (\code{pool="rel"}). If left as \code{NULL} (the default) a diagonal matrix with elements equal to 1
-is used.}
-
 \item{corparam}{A boolean object that indicates whether correlation should be modeled
 between relative effect time-course parameters. Default is \code{FALSE} and this is automatically set to \code{FALSE} if class effects are modeled.
 Setting it to \code{TRUE} models correlation between time-course parameters. This can help identify parameters
@@ -93,19 +84,6 @@ parameters to model with a class effect and what that effect should be
 \item{UME}{Can take either \code{TRUE} or \code{FALSE} (for an unrelated mean effects
 model on all or no time-course parameters respectively) or can be a vector
 of parameter name strings to model as UME. For example: \code{c("beta.1", "beta.2")}.}
-
-\item{pd}{Can take either:
-\itemize{
-\item \code{pv} only pV will be reported (as automatically outputted by R2jags).
-\item \code{plugin} calculates pD by the plug-in
-method \insertCite{spiegelhalter2002}{MBNMAtime}. It is faster, but may output negative
-non-sensical values, due to skewed deviances that can arise with non-linear models.
-\item \code{pd.kl} (the default) calculates pD by the Kullback–Leibler divergence \insertCite{plummer2008}{MBNMAtime}. This
-will require running the model for additional iterations but
-will always produce a sensical result.
-\item \code{popt} calculates pD using an optimism adjustment which allows for calculation
-of the penalized expected deviance \insertCite{plummer2008}{MBNMAtime}
-}}
 
 \item{parallel}{A boolean value that indicates whether JAGS should be run in
 parallel (\code{TRUE}) or not (\code{FALSE}). If \code{TRUE} then the number of cores to
@@ -125,6 +103,10 @@ beginning. Default is \verb{n.iter/2``, that is, discarding the first half of th
 
 \item{n.thin}{thinning rate. Must be a positive integer. Set \verb{n.thin > 1`` to save memory and computation time if }n.iter\verb{is large. Default is}max(1, floor(n.chains * (n.iter-n.burnin) / 1000))`` which will only thin if there are at least 2000
 simulations.}
+
+\item{pD}{logical; if \code{TRUE} (the default) then adds the computation of pD, using the method
+of \insertCite{plummer2008}{MBNMAtime}. If \code{FALSE} then uses the
+approximation of \code{pD=var(deviance) / 2} (often referred to as pV).}
 
 \item{model.file}{The file path to a JAGS model (.jags file) that can be used
 to overwrite the JAGS model that is automatically written based on the

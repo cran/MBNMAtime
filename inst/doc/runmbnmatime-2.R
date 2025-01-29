@@ -12,14 +12,17 @@ library(MBNMAtime)
 library(rmarkdown)
 library(knitr)
 library(dplyr)
+library(ggplot2)
 #load(system.file("extdata", "vignettedata.rda", package="MBNMAtime", mustWork = TRUE))
 
-## ---- eval=FALSE--------------------------------------------------------------
-#  tspline(type="bs", knots=3)
-#  # ...is equivalent to
-#  tspline(type="bs", knots=c(0.25,0.5,0.75))
+## ----eval=FALSE---------------------------------------------------------------
+#  # 3 equally spaced knots
+#  tspline(type="bs", nknots=3)
+#  
+#  # knots at times of 2, 5 and 8
+#  tspline(type="bs", knots=c(2,5,8))
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Prepare data using the alogliptin dataset
 network.alog <- mb.network(alog_pcfb, reference = "placebo")
 
@@ -29,7 +32,7 @@ mbnma <- mb.run(network.alog, fun=tpoly(degree=1, pool.1="rel", method.1="common
 ## -----------------------------------------------------------------------------
 summary(mbnma)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Run an Emax time-course MBNMA with two parameters
 mbnma <- mb.run(network.alog, fun=temax(
   pool.emax = "rel", method.emax="common",
@@ -39,7 +42,7 @@ mbnma <- mb.run(network.alog, fun=temax(
 ## -----------------------------------------------------------------------------
 summary(mbnma)
 
-## ---- eval=TRUE, results="hide"-----------------------------------------------
+## ----eval=TRUE, results="hide"------------------------------------------------
 # Using the COPD dataset
 network.copd <- mb.network(copd)
 
@@ -49,14 +52,14 @@ mbnma <- mb.run(network.copd,
                 fun=tloglin(pool.rate="rel", method.rate="random"),
                 rho="dunif(0,1)", covar="varadj")
 
-## ---- results="hide", message=FALSE, warning=FALSE----------------------------
+## ----results="hide", message=FALSE, warning=FALSE-----------------------------
 # Create network object of gout dataset
 network.gout <- mb.network(goutSUA_CFBcomb)
 
-# Run a B-spline time-course MBNMA with a knot at 0.2 times the max follow-up
+# Run a B-spline time-course MBNMA with a knot at 8 weeks follow-up
 # Common class effect on beta.2, the 2nd spline coefficient
 mbnma <- mb.run(network.gout, 
-                fun=tspline(type="bs", knots=c(0.2),
+                fun=tspline(type="bs", knots=8,
                             pool.1 = "rel", method.1="common",
                             pool.2="rel", method.2="random"),
                 class.effect = list(beta.2="common"))
@@ -65,12 +68,12 @@ mbnma <- mb.run(network.gout,
 ## -----------------------------------------------------------------------------
 summary(mbnma)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  mbnma <- mb.run(network.copd,
 #                  fun=tloglin(pool.rate="rel", method.rate="random"),
 #                  priors=list(rate="dnorm(0,2) T(0,)"))
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Define informative priors for spline parameters
 spline.priors <- list(
   d.3 = c(
@@ -83,7 +86,7 @@ spline.priors <- list(
   ))
 
 # Using the COPD dataset with a B-spline MBNMA
-mbnma <- mb.run(network.copd, fun=tspline(degree=2, knots=c(0.1,0.5)),
+mbnma <- mb.run(network.copd, fun=tspline(degree=2, knots=c(5,26)),
                 priors=spline.priors)
 
 ## -----------------------------------------------------------------------------

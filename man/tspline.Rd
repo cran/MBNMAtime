@@ -6,7 +6,8 @@
 \usage{
 tspline(
   type = "bs",
-  knots = 1,
+  knots = NULL,
+  nknots = 1,
   degree = 1,
   pool.1 = "rel",
   method.1 = "common",
@@ -15,15 +16,23 @@ tspline(
   pool.3 = "rel",
   method.3 = "common",
   pool.4 = "rel",
-  method.4 = "common"
+  method.4 = "common",
+  pool.5 = "rel",
+  method.5 = "common",
+  pool.6 = "rel",
+  method.6 = "common"
 )
 }
 \arguments{
 \item{type}{The type of spline. Can take \code{"bs"} (\href{https://mathworld.wolfram.com/B-Spline.html}{B-spline}),
 \code{"ns"} (\href{https://mathworld.wolfram.com/CubicSpline.html}{natural cubic spline}) or \code{"ls"} (piecewise linear spline)}
 
-\item{knots}{The number/location of spline internal knots. If a single number is given it indicates the number of knots (they will
-be equally spaced across the range of time points). If a numeric vector is given it indicates the location of the knots.}
+\item{knots}{A numeric vector indicating the location of spline internal knots
+(\emph{specified on the same scale as \code{time} in the dataset}). Specifying \code{knots} overrides
+\code{nknots}.}
+
+\item{nknots}{The number of spline internal knots. If \code{knots} is not specified then these will by
+default be evenly spaced between 0 and the maximum follow-up time in the dataset (\code{max.time}).}
 
 \item{degree}{The degree of the piecewise B-spline polynomial - e.g. \code{degree=1} for linear, \code{degree=2} for quadratic, \code{degree=3} for cubic.}
 
@@ -42,13 +51,23 @@ be equally spaced across the range of time points). If a numeric vector is given
 \item{pool.4}{Pooling for the 4th coefficient. Can take \code{"rel"} or \code{"abs"} (see details).}
 
 \item{method.4}{Method for synthesis of the 4th coefficient. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
+
+\item{pool.5}{Pooling for the 5th coefficient. Can take \code{"rel"} or \code{"abs"} (see details).}
+
+\item{method.5}{Method for synthesis of the 5th coefficient. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
+
+\item{pool.6}{Pooling for the 6th coefficient. Can take \code{"rel"} or \code{"abs"} (see details).}
+
+\item{method.6}{Method for synthesis of the 6th coefficient. Can take \verb{"common}, \code{"random"}, or be assigned a numeric value (see details).}
 }
 \value{
 An object of \code{class("timefun")}
 }
 \description{
 Used to fit B-splines, natural cubic splines, and
-piecewise linear splines\insertCite{perperoglu2019}{MBNMAtime}.
+piecewise linear splines\insertCite{perperoglu2019}{MBNMAtime}. Note that
+B-splines with \code{degree=1} and linear splines are equivalent in fit, but are
+parameterised differently which can allow different informative prior specification.
 }
 \section{Time-course parameters}{
 
@@ -73,21 +92,19 @@ and can take any of the following values:\tabular{ll}{
 
 When relative effects are modelled on more than one time-course parameter,
 correlation between them is automatically estimated using a vague inverse-Wishart prior.
-This prior can be made slightly more informative by specifying the scale matrix \code{omega}
-and by changing the degrees of freedom of the inverse-Wishart prior
-using the \code{priors} argument in \code{mb.run()}.
 }
 
 \examples{
-# Second order B spline with 2 knots and random effects on the 2nd coefficient
-tspline(type="bs", knots=2, degree=2,
+# Second order B spline with 2 equally spaced knots and random effects on
+#the 2nd coefficient
+tspline(type="bs", nknots=2, degree=2,
   pool.1="rel", method.1="common",
   pool.2="rel", method.2="random")
 
-# Piecewise linear spline with knots at 0.1 and 0.5 quantiles
+# Piecewise linear spline with knots at times of 5 and 10
 # Single parameter independent of treatment estimated for 1st coefficient
 #with random effects
-tspline(type="ls", knots=c(0.1,0.5),
+tspline(type="ls", knots=c(5,10),
   pool.1="abs", method.1="random",
   pool.2="rel", method.2="common")
 

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Hugo Pedder" />
 
-<meta name="date" content="2023-10-14" />
+<meta name="date" content="2025-01-28" />
 
 <title>Perform a time-course Model-Based Network Meta-Analysis (MBNMA)</title>
 
@@ -51,7 +51,7 @@ overflow: visible;
 </style>
 <style type="text/css" data-origin="pandoc">
 pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span { line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
@@ -62,7 +62,7 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
 { counter-reset: source-line 0; }
@@ -150,6 +150,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 div.csl-bib-body { }
 div.csl-entry {
 clear: both;
+margin-bottom: 0em;
 }
 .hanging div.csl-entry {
 margin-left:2em;
@@ -363,7 +364,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">Perform a time-course Model-Based Network
 Meta-Analysis (MBNMA)</h1>
 <h4 class="author">Hugo Pedder</h4>
-<h4 class="date">2023-10-14</h4>
+<h4 class="date">2025-01-28</h4>
 
 
 
@@ -451,18 +452,18 @@ very flexible and can allow for a variety of non-monotonic time-course
 relationships, though parameters can be difficult to interpret and the
 resulting time-course shape is often best visualised by calculating and
 plotting predictions <a href="predictions-5.html">Prediction</a>.</p>
-<p>To fit this model, the number/location of <code>knots</code> (the
-points at which the different spline pieces meet) should be specified.
-If a single number is given, it represents the the number of knots to be
-equally spaced across the range of times within the dataset.
-Alternatively several probabilities can be given that represent the
-quantiles of the time range at which knots should be located. Note that
-by default, a boundary knot will be placed at the maximum of the range
-of time-points to limit the function extrapolating to extreme
-values.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">knots=</span><span class="dv">3</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># ...is equivalent to </span></span>
-<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">knots=</span><span class="fu">c</span>(<span class="fl">0.25</span>,<span class="fl">0.5</span>,<span class="fl">0.75</span>))</span></code></pre></div>
+<p>To fit this model, the number/location of knots (the points at which
+the different spline pieces meet) should be specified. These can be
+specified either as a number of equally spaced knots, using
+<code>nknots</code>, or by specifying the specific knot locations on the
+time scale in the dataset, using <code>knots</code>. Note that by
+default, a boundary knot will be placed at the maximum of the range of
+time-points to limit the function extrapolating to extreme values.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># 3 equally spaced knots</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">nknots=</span><span class="dv">3</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a> </span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co"># knots at times of 2, 5 and 8</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">knots=</span><span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">5</span>,<span class="dv">8</span>))</span></code></pre></div>
 </div>
 <div id="choosing-a-time-course-function" class="section level4">
 <h4>Choosing a time-course function</h4>
@@ -570,11 +571,11 @@ performed as follows:</p>
 <span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; |Treatment |Parameter |  Median|    2.5%|   97.5%|</span></span>
 <span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co">#&gt; |:---------|:---------|-------:|-------:|-------:|</span></span>
 <span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="co">#&gt; |placebo   |d.1[1]    |  0.0000|  0.0000|  0.0000|</span></span>
-<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |d.1[2]    | -0.0348| -0.0376| -0.0319|</span></span>
-<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |d.1[3]    | -0.0422| -0.0440| -0.0404|</span></span>
-<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="co">#&gt; |alog_25   |d.1[4]    | -0.0449| -0.0468| -0.0431|</span></span>
-<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt; |alog_50   |d.1[5]    | -0.0512| -0.0539| -0.0483|</span></span>
-<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="co">#&gt; |alog_100  |d.1[6]    | -0.0479| -0.0665| -0.0298|</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |d.1[2]    | -0.0347| -0.0376| -0.0318|</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |d.1[3]    | -0.0423| -0.0440| -0.0404|</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="co">#&gt; |alog_25   |d.1[4]    | -0.0450| -0.0467| -0.0432|</span></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt; |alog_50   |d.1[5]    | -0.0511| -0.0539| -0.0483|</span></span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="co">#&gt; |alog_100  |d.1[6]    | -0.0485| -0.0664| -0.0297|</span></span>
 <span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="co">#&gt; </span></span>
@@ -585,7 +586,7 @@ performed as follows:</p>
 <span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a><span class="co">#&gt; #### Model Fit Statistics ####</span></span>
 <span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a><span class="co">#&gt; Effective number of parameters:</span></span>
-<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a><span class="co">#&gt; pD (pV) calculated using the rule, pD = var(deviance)/2 = 19</span></span>
+<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a><span class="co">#&gt; pD calculated using the Kullback-Leibler divergence = 19</span></span>
 <span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a><span class="co">#&gt; Deviance = 4502</span></span>
 <span id="cb3-33"><a href="#cb3-33" tabindex="-1"></a><span class="co">#&gt; Residual deviance = 5449</span></span>
 <span id="cb3-34"><a href="#cb3-34" tabindex="-1"></a><span class="co">#&gt; Deviance Information Criterion (DIC) = 4521</span></span></code></pre></div>
@@ -624,11 +625,11 @@ we choose.</p>
 <span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt; |Treatment |Parameter |  Median|    2.5%|   97.5%|</span></span>
 <span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="co">#&gt; |:---------|:---------|-------:|-------:|-------:|</span></span>
 <span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="co">#&gt; |placebo   |emax[1]   |  0.0000|  0.0000|  0.0000|</span></span>
-<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |emax[2]   | -0.5875| -0.6518| -0.5241|</span></span>
-<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |emax[3]   | -0.7761| -0.8174| -0.7368|</span></span>
-<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; |alog_25   |emax[4]   | -0.8450| -0.8880| -0.8054|</span></span>
-<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; |alog_50   |emax[5]   | -0.9649| -1.0349| -0.8970|</span></span>
-<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; |alog_100  |emax[6]   | -0.8335| -1.1023| -0.5729|</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |emax[2]   | -0.5885| -0.6537| -0.5243|</span></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |emax[3]   | -0.7758| -0.8171| -0.7356|</span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; |alog_25   |emax[4]   | -0.8450| -0.8869| -0.8043|</span></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; |alog_50   |emax[5]   | -0.9653| -1.0373| -0.9006|</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; |alog_100  |emax[6]   | -0.8280| -1.0888| -0.5639|</span></span>
 <span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="co">#&gt; et50 parameter</span></span>
@@ -637,12 +638,12 @@ we choose.</p>
 <span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a><span class="co">#&gt; |Treatment |Parameter | Median|   2.5%|  97.5%|</span></span>
 <span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a><span class="co">#&gt; |:---------|:---------|------:|------:|------:|</span></span>
-<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a><span class="co">#&gt; |placebo   |et50      | 5.1959| 4.7988| 5.6024|</span></span>
-<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |et50      | 5.1959| 4.7988| 5.6024|</span></span>
-<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |et50      | 5.1959| 4.7988| 5.6024|</span></span>
-<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a><span class="co">#&gt; |alog_25   |et50      | 5.1959| 4.7988| 5.6024|</span></span>
-<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a><span class="co">#&gt; |alog_50   |et50      | 5.1959| 4.7988| 5.6024|</span></span>
-<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a><span class="co">#&gt; |alog_100  |et50      | 5.1959| 4.7988| 5.6024|</span></span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a><span class="co">#&gt; |placebo   |et50      | 5.1911| 4.8031| 5.6011|</span></span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a><span class="co">#&gt; |alog_6.25 |et50      | 5.1911| 4.8031| 5.6011|</span></span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a><span class="co">#&gt; |alog_12.5 |et50      | 5.1911| 4.8031| 5.6011|</span></span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a><span class="co">#&gt; |alog_25   |et50      | 5.1911| 4.8031| 5.6011|</span></span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a><span class="co">#&gt; |alog_50   |et50      | 5.1911| 4.8031| 5.6011|</span></span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a><span class="co">#&gt; |alog_100  |et50      | 5.1911| 4.8031| 5.6011|</span></span>
 <span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-37"><a href="#cb5-37" tabindex="-1"></a><span class="co">#&gt; </span></span>
@@ -653,7 +654,7 @@ we choose.</p>
 <span id="cb5-42"><a href="#cb5-42" tabindex="-1"></a><span class="co">#&gt; #### Model Fit Statistics ####</span></span>
 <span id="cb5-43"><a href="#cb5-43" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb5-44"><a href="#cb5-44" tabindex="-1"></a><span class="co">#&gt; Effective number of parameters:</span></span>
-<span id="cb5-45"><a href="#cb5-45" tabindex="-1"></a><span class="co">#&gt; pD (pV) calculated using the rule, pD = var(deviance)/2 = 19</span></span>
+<span id="cb5-45"><a href="#cb5-45" tabindex="-1"></a><span class="co">#&gt; pD calculated using the Kullback-Leibler divergence = 20</span></span>
 <span id="cb5-46"><a href="#cb5-46" tabindex="-1"></a><span class="co">#&gt; Deviance = 88</span></span>
 <span id="cb5-47"><a href="#cb5-47" tabindex="-1"></a><span class="co">#&gt; Residual deviance = 1035</span></span>
 <span id="cb5-48"><a href="#cb5-48" tabindex="-1"></a><span class="co">#&gt; Deviance Information Criterion (DIC) = 107</span></span></code></pre></div>
@@ -806,10 +807,10 @@ class mean.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Create network object of gout dataset</span></span>
 <span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>network.gout <span class="ot">&lt;-</span> <span class="fu">mb.network</span>(goutSUA_CFBcomb)</span>
 <span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Run a B-spline time-course MBNMA with a knot at 0.2 times the max follow-up</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Run a B-spline time-course MBNMA with a knot at 8 weeks follow-up</span></span>
 <span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co"># Common class effect on beta.2, the 2nd spline coefficient</span></span>
 <span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>mbnma <span class="ot">&lt;-</span> <span class="fu">mb.run</span>(network.gout, </span>
-<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>                <span class="at">fun=</span><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">knots=</span><span class="fu">c</span>(<span class="fl">0.2</span>),</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>                <span class="at">fun=</span><span class="fu">tspline</span>(<span class="at">type=</span><span class="st">&quot;bs&quot;</span>, <span class="at">knots=</span><span class="dv">8</span>,</span>
 <span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>                            <span class="at">pool.1 =</span> <span class="st">&quot;rel&quot;</span>, <span class="at">method.1=</span><span class="st">&quot;common&quot;</span>,</span>
 <span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>                            <span class="at">pool.2=</span><span class="st">&quot;rel&quot;</span>, <span class="at">method.2=</span><span class="st">&quot;random&quot;</span>),</span>
 <span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>                <span class="at">class.effect =</span> <span class="fu">list</span>(<span class="at">beta.2=</span><span class="st">&quot;common&quot;</span>))</span></code></pre></div>
@@ -818,7 +819,7 @@ class mean.</p>
 <span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; Time-course MBNMA</span></span>
 <span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt; ========================================</span></span>
 <span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; Time-course function: B-spline (knots = 0.2; degree = 1)</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; Time-course function: B-spline (knots = 8; degree = 1)</span></span>
 <span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; Data modelled without intercept (change from baseline data assumed)</span></span>
 <span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; beta.1 parameter</span></span>
@@ -828,24 +829,24 @@ class mean.</p>
 <span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt; |Treatment |Parameter |   Median|     2.5%|    97.5%|</span></span>
 <span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt; |:---------|:---------|--------:|--------:|--------:|</span></span>
 <span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; |Plac      |d.1[1]    |   0.0000|   0.0000|   0.0000|</span></span>
-<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; |Allo_100  |d.1[2]    |  -1.4812|  -2.8834|  -0.0491|</span></span>
-<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt; |Allo_200  |d.1[3]    |  -3.0022|  -3.2520|  -2.7657|</span></span>
-<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; |Allo_289  |d.1[4]    |  -4.9111|  -5.0860|  -4.7468|</span></span>
-<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="co">#&gt; |Allo_400  |d.1[5]    | -12.7637| -14.3045| -11.1397|</span></span>
-<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="co">#&gt; |Arha_NA   |d.1[6]    |  -6.8406|  -7.5786|  -6.0904|</span></span>
-<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="co">#&gt; |BCX4_140  |d.1[7]    |  -4.5848|  -4.9639|  -4.2187|</span></span>
-<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="co">#&gt; |BCX4_18.5 |d.1[8]    |  -2.4443|  -2.8851|  -2.0310|</span></span>
-<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a><span class="co">#&gt; |BCX4_240  |d.1[9]    |  -5.8944|  -6.3454|  -5.4454|</span></span>
-<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a><span class="co">#&gt; |BCX4_80   |d.1[10]   |  -3.5958|  -4.0683|  -3.1600|</span></span>
-<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a><span class="co">#&gt; |Benz_NA   |d.1[11]   | -15.5456| -16.7276| -14.2684|</span></span>
-<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a><span class="co">#&gt; |Febu_140  |d.1[12]   |  -7.2839|  -7.4603|  -7.1122|</span></span>
-<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a><span class="co">#&gt; |Febu_210  |d.1[13]   |  -8.8131|  -8.9075|  -8.7118|</span></span>
-<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a><span class="co">#&gt; |Febu_25   |d.1[14]   |  -3.8389|  -4.0032|  -3.6745|</span></span>
-<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a><span class="co">#&gt; |Febu_72.5 |d.1[15]   |  -6.1696|  -6.3489|  -6.0007|</span></span>
-<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a><span class="co">#&gt; |RDEA_100  |d.1[16]   |  -2.3589|  -2.8981|  -1.8118|</span></span>
-<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a><span class="co">#&gt; |RDEA_200  |d.1[17]   |  -4.1105|  -4.4747|  -3.7527|</span></span>
-<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a><span class="co">#&gt; |RDEA_400  |d.1[18]   |  -5.2340|  -5.5800|  -4.9231|</span></span>
-<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a><span class="co">#&gt; |RDEA_600  |d.1[19]   |  -8.0801|  -8.5107|  -7.6485|</span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; |Allo_100  |d.1[2]    |  -1.1482|  -2.2317|  -0.0986|</span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt; |Allo_200  |d.1[3]    |  -3.1065|  -3.3220|  -2.8907|</span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; |Allo_289  |d.1[4]    |  -4.4377|  -4.6122|  -4.2583|</span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="co">#&gt; |Allo_400  |d.1[5]    | -10.4839| -11.6322|  -9.2313|</span></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="co">#&gt; |Arha_NA   |d.1[6]    |  -5.2466|  -5.8205|  -4.7003|</span></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="co">#&gt; |BCX4_140  |d.1[7]    |  -3.9476|  -4.2610|  -3.6272|</span></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="co">#&gt; |BCX4_18.5 |d.1[8]    |  -2.2184|  -2.6054|  -1.8320|</span></span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a><span class="co">#&gt; |BCX4_240  |d.1[9]    |  -5.1085|  -5.4908|  -4.7172|</span></span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a><span class="co">#&gt; |BCX4_80   |d.1[10]   |  -3.0722|  -3.4557|  -2.6842|</span></span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a><span class="co">#&gt; |Benz_NA   |d.1[11]   | -12.6297| -13.5062| -11.7177|</span></span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a><span class="co">#&gt; |Febu_140  |d.1[12]   |  -6.7155|  -6.8905|  -6.5349|</span></span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a><span class="co">#&gt; |Febu_210  |d.1[13]   |  -8.1343|  -8.2255|  -8.0404|</span></span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a><span class="co">#&gt; |Febu_25   |d.1[14]   |  -3.7478|  -3.9132|  -3.5774|</span></span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a><span class="co">#&gt; |Febu_72.5 |d.1[15]   |  -5.7360|  -5.9101|  -5.5602|</span></span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a><span class="co">#&gt; |RDEA_100  |d.1[16]   |  -1.7403|  -2.2229|  -1.2438|</span></span>
+<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a><span class="co">#&gt; |RDEA_200  |d.1[17]   |  -3.3681|  -3.6573|  -3.0842|</span></span>
+<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a><span class="co">#&gt; |RDEA_400  |d.1[18]   |  -4.3142|  -4.6001|  -4.0464|</span></span>
+<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a><span class="co">#&gt; |RDEA_600  |d.1[19]   |  -6.3948|  -6.7293|  -6.0435|</span></span>
 <span id="cb8-34"><a href="#cb8-34" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-35"><a href="#cb8-35" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-36"><a href="#cb8-36" tabindex="-1"></a><span class="co">#&gt; beta.2 parameter</span></span>
@@ -856,30 +857,30 @@ class mean.</p>
 <span id="cb8-41"><a href="#cb8-41" tabindex="-1"></a><span class="co">#&gt; |Treatment |Parameter |  Median|     2.5%|   97.5%|</span></span>
 <span id="cb8-42"><a href="#cb8-42" tabindex="-1"></a><span class="co">#&gt; |:---------|:---------|-------:|--------:|-------:|</span></span>
 <span id="cb8-43"><a href="#cb8-43" tabindex="-1"></a><span class="co">#&gt; |Plac      |d.2[1]    |  0.0000|   0.0000|  0.0000|</span></span>
-<span id="cb8-44"><a href="#cb8-44" tabindex="-1"></a><span class="co">#&gt; |Allo_100  |d.2[2]    | 17.7458|   3.8611| 29.9937|</span></span>
-<span id="cb8-45"><a href="#cb8-45" tabindex="-1"></a><span class="co">#&gt; |Allo_200  |d.2[3]    | 17.7458|   3.8611| 29.9937|</span></span>
-<span id="cb8-46"><a href="#cb8-46" tabindex="-1"></a><span class="co">#&gt; |Allo_289  |d.2[4]    | 17.7458|   3.8611| 29.9937|</span></span>
-<span id="cb8-47"><a href="#cb8-47" tabindex="-1"></a><span class="co">#&gt; |Allo_400  |d.2[5]    | 17.7458|   3.8611| 29.9937|</span></span>
-<span id="cb8-48"><a href="#cb8-48" tabindex="-1"></a><span class="co">#&gt; |Arha_NA   |d.2[6]    | -0.8015| -61.4871| 63.7667|</span></span>
-<span id="cb8-49"><a href="#cb8-49" tabindex="-1"></a><span class="co">#&gt; |BCX4_140  |d.2[7]    | 10.1335|  -2.1110| 22.4626|</span></span>
-<span id="cb8-50"><a href="#cb8-50" tabindex="-1"></a><span class="co">#&gt; |BCX4_18.5 |d.2[8]    | 10.1335|  -2.1110| 22.4626|</span></span>
-<span id="cb8-51"><a href="#cb8-51" tabindex="-1"></a><span class="co">#&gt; |BCX4_240  |d.2[9]    | 10.1335|  -2.1110| 22.4626|</span></span>
-<span id="cb8-52"><a href="#cb8-52" tabindex="-1"></a><span class="co">#&gt; |BCX4_80   |d.2[10]   | 10.1335|  -2.1110| 22.4626|</span></span>
-<span id="cb8-53"><a href="#cb8-53" tabindex="-1"></a><span class="co">#&gt; |Benz_NA   |d.2[11]   | 18.4397|  -6.2383| 42.3807|</span></span>
-<span id="cb8-54"><a href="#cb8-54" tabindex="-1"></a><span class="co">#&gt; |Febu_140  |d.2[12]   | 16.3229|   5.1173| 26.4253|</span></span>
-<span id="cb8-55"><a href="#cb8-55" tabindex="-1"></a><span class="co">#&gt; |Febu_210  |d.2[13]   | 16.3229|   5.1173| 26.4253|</span></span>
-<span id="cb8-56"><a href="#cb8-56" tabindex="-1"></a><span class="co">#&gt; |Febu_25   |d.2[14]   | 16.3229|   5.1173| 26.4253|</span></span>
-<span id="cb8-57"><a href="#cb8-57" tabindex="-1"></a><span class="co">#&gt; |Febu_72.5 |d.2[15]   | 16.3229|   5.1173| 26.4253|</span></span>
-<span id="cb8-58"><a href="#cb8-58" tabindex="-1"></a><span class="co">#&gt; |RDEA_100  |d.2[16]   | 21.0135|   4.2870| 37.1973|</span></span>
-<span id="cb8-59"><a href="#cb8-59" tabindex="-1"></a><span class="co">#&gt; |RDEA_200  |d.2[17]   | 21.0135|   4.2870| 37.1973|</span></span>
-<span id="cb8-60"><a href="#cb8-60" tabindex="-1"></a><span class="co">#&gt; |RDEA_400  |d.2[18]   | 21.0135|   4.2870| 37.1973|</span></span>
-<span id="cb8-61"><a href="#cb8-61" tabindex="-1"></a><span class="co">#&gt; |RDEA_600  |d.2[19]   | 21.0135|   4.2870| 37.1973|</span></span>
+<span id="cb8-44"><a href="#cb8-44" tabindex="-1"></a><span class="co">#&gt; |Allo_100  |d.2[2]    | 12.9684|   5.8526| 19.8121|</span></span>
+<span id="cb8-45"><a href="#cb8-45" tabindex="-1"></a><span class="co">#&gt; |Allo_200  |d.2[3]    | 12.9684|   5.8526| 19.8121|</span></span>
+<span id="cb8-46"><a href="#cb8-46" tabindex="-1"></a><span class="co">#&gt; |Allo_289  |d.2[4]    | 12.9684|   5.8526| 19.8121|</span></span>
+<span id="cb8-47"><a href="#cb8-47" tabindex="-1"></a><span class="co">#&gt; |Allo_400  |d.2[5]    | 12.9684|   5.8526| 19.8121|</span></span>
+<span id="cb8-48"><a href="#cb8-48" tabindex="-1"></a><span class="co">#&gt; |Arha_NA   |d.2[6]    |  0.2760| -63.9975| 61.9457|</span></span>
+<span id="cb8-49"><a href="#cb8-49" tabindex="-1"></a><span class="co">#&gt; |BCX4_140  |d.2[7]    |  2.5687|  -4.1998|  9.5767|</span></span>
+<span id="cb8-50"><a href="#cb8-50" tabindex="-1"></a><span class="co">#&gt; |BCX4_18.5 |d.2[8]    |  2.5687|  -4.1998|  9.5767|</span></span>
+<span id="cb8-51"><a href="#cb8-51" tabindex="-1"></a><span class="co">#&gt; |BCX4_240  |d.2[9]    |  2.5687|  -4.1998|  9.5767|</span></span>
+<span id="cb8-52"><a href="#cb8-52" tabindex="-1"></a><span class="co">#&gt; |BCX4_80   |d.2[10]   |  2.5687|  -4.1998|  9.5767|</span></span>
+<span id="cb8-53"><a href="#cb8-53" tabindex="-1"></a><span class="co">#&gt; |Benz_NA   |d.2[11]   | 14.6265|  -0.7073| 29.2587|</span></span>
+<span id="cb8-54"><a href="#cb8-54" tabindex="-1"></a><span class="co">#&gt; |Febu_140  |d.2[12]   | 10.2905|   4.3994| 16.3143|</span></span>
+<span id="cb8-55"><a href="#cb8-55" tabindex="-1"></a><span class="co">#&gt; |Febu_210  |d.2[13]   | 10.2905|   4.3994| 16.3143|</span></span>
+<span id="cb8-56"><a href="#cb8-56" tabindex="-1"></a><span class="co">#&gt; |Febu_25   |d.2[14]   | 10.2905|   4.3994| 16.3143|</span></span>
+<span id="cb8-57"><a href="#cb8-57" tabindex="-1"></a><span class="co">#&gt; |Febu_72.5 |d.2[15]   | 10.2905|   4.3994| 16.3143|</span></span>
+<span id="cb8-58"><a href="#cb8-58" tabindex="-1"></a><span class="co">#&gt; |RDEA_100  |d.2[16]   | 10.1000|   0.9415| 19.8264|</span></span>
+<span id="cb8-59"><a href="#cb8-59" tabindex="-1"></a><span class="co">#&gt; |RDEA_200  |d.2[17]   | 10.1000|   0.9415| 19.8264|</span></span>
+<span id="cb8-60"><a href="#cb8-60" tabindex="-1"></a><span class="co">#&gt; |RDEA_400  |d.2[18]   | 10.1000|   0.9415| 19.8264|</span></span>
+<span id="cb8-61"><a href="#cb8-61" tabindex="-1"></a><span class="co">#&gt; |RDEA_600  |d.2[19]   | 10.1000|   0.9415| 19.8264|</span></span>
 <span id="cb8-62"><a href="#cb8-62" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-63"><a href="#cb8-63" tabindex="-1"></a><span class="co">#&gt; Between-study SD modelled for this parameter:</span></span>
 <span id="cb8-64"><a href="#cb8-64" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb8-65"><a href="#cb8-65" tabindex="-1"></a><span class="co">#&gt; |Parameter |  Median|   2.5%|   97.5%|</span></span>
-<span id="cb8-66"><a href="#cb8-66" tabindex="-1"></a><span class="co">#&gt; |:---------|-------:|------:|-------:|</span></span>
-<span id="cb8-67"><a href="#cb8-67" tabindex="-1"></a><span class="co">#&gt; |sd.beta.2 | 11.8212| 9.1481| 15.5026|</span></span>
+<span id="cb8-65"><a href="#cb8-65" tabindex="-1"></a><span class="co">#&gt; |Parameter | Median|   2.5%| 97.5%|</span></span>
+<span id="cb8-66"><a href="#cb8-66" tabindex="-1"></a><span class="co">#&gt; |:---------|------:|------:|-----:|</span></span>
+<span id="cb8-67"><a href="#cb8-67" tabindex="-1"></a><span class="co">#&gt; |sd.beta.2 | 6.6065| 4.9666| 9.101|</span></span>
 <span id="cb8-68"><a href="#cb8-68" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-69"><a href="#cb8-69" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-70"><a href="#cb8-70" tabindex="-1"></a><span class="co">#&gt; Class Effects</span></span>
@@ -890,12 +891,12 @@ class mean.</p>
 <span id="cb8-75"><a href="#cb8-75" tabindex="-1"></a><span class="co">#&gt; |Class |Parameter |  Median|     2.5%|   97.5%|</span></span>
 <span id="cb8-76"><a href="#cb8-76" tabindex="-1"></a><span class="co">#&gt; |:-----|:---------|-------:|--------:|-------:|</span></span>
 <span id="cb8-77"><a href="#cb8-77" tabindex="-1"></a><span class="co">#&gt; |Plac  |D.2[1]    |  0.0000|   0.0000|  0.0000|</span></span>
-<span id="cb8-78"><a href="#cb8-78" tabindex="-1"></a><span class="co">#&gt; |Allo  |D.2[2]    | 17.7458|   3.8611| 29.9937|</span></span>
-<span id="cb8-79"><a href="#cb8-79" tabindex="-1"></a><span class="co">#&gt; |Arha  |D.2[3]    | -0.8015| -61.4871| 63.7667|</span></span>
-<span id="cb8-80"><a href="#cb8-80" tabindex="-1"></a><span class="co">#&gt; |BCX4  |D.2[4]    | 10.1335|  -2.1110| 22.4626|</span></span>
-<span id="cb8-81"><a href="#cb8-81" tabindex="-1"></a><span class="co">#&gt; |Benz  |D.2[5]    | 18.4397|  -6.2383| 42.3807|</span></span>
-<span id="cb8-82"><a href="#cb8-82" tabindex="-1"></a><span class="co">#&gt; |Febu  |D.2[6]    | 16.3229|   5.1173| 26.4253|</span></span>
-<span id="cb8-83"><a href="#cb8-83" tabindex="-1"></a><span class="co">#&gt; |RDEA  |D.2[7]    | 21.0135|   4.2870| 37.1973|</span></span>
+<span id="cb8-78"><a href="#cb8-78" tabindex="-1"></a><span class="co">#&gt; |Allo  |D.2[2]    | 12.9684|   5.8526| 19.8121|</span></span>
+<span id="cb8-79"><a href="#cb8-79" tabindex="-1"></a><span class="co">#&gt; |Arha  |D.2[3]    |  0.2760| -63.9975| 61.9457|</span></span>
+<span id="cb8-80"><a href="#cb8-80" tabindex="-1"></a><span class="co">#&gt; |BCX4  |D.2[4]    |  2.5687|  -4.1998|  9.5767|</span></span>
+<span id="cb8-81"><a href="#cb8-81" tabindex="-1"></a><span class="co">#&gt; |Benz  |D.2[5]    | 14.6265|  -0.7073| 29.2587|</span></span>
+<span id="cb8-82"><a href="#cb8-82" tabindex="-1"></a><span class="co">#&gt; |Febu  |D.2[6]    | 10.2905|   4.3994| 16.3143|</span></span>
+<span id="cb8-83"><a href="#cb8-83" tabindex="-1"></a><span class="co">#&gt; |RDEA  |D.2[7]    | 10.1000|   0.9415| 19.8264|</span></span>
 <span id="cb8-84"><a href="#cb8-84" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-85"><a href="#cb8-85" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-86"><a href="#cb8-86" tabindex="-1"></a><span class="co">#&gt; Correlation between time points</span></span>
@@ -905,10 +906,10 @@ class mean.</p>
 <span id="cb8-90"><a href="#cb8-90" tabindex="-1"></a><span class="co">#&gt; #### Model Fit Statistics ####</span></span>
 <span id="cb8-91"><a href="#cb8-91" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb8-92"><a href="#cb8-92" tabindex="-1"></a><span class="co">#&gt; Effective number of parameters:</span></span>
-<span id="cb8-93"><a href="#cb8-93" tabindex="-1"></a><span class="co">#&gt; pD (pV) calculated using the rule, pD = var(deviance)/2 = 86</span></span>
-<span id="cb8-94"><a href="#cb8-94" tabindex="-1"></a><span class="co">#&gt; Deviance = 149881</span></span>
-<span id="cb8-95"><a href="#cb8-95" tabindex="-1"></a><span class="co">#&gt; Residual deviance = 150575</span></span>
-<span id="cb8-96"><a href="#cb8-96" tabindex="-1"></a><span class="co">#&gt; Deviance Information Criterion (DIC) = 149967</span></span></code></pre></div>
+<span id="cb8-93"><a href="#cb8-93" tabindex="-1"></a><span class="co">#&gt; pD calculated using the Kullback-Leibler divergence = 82</span></span>
+<span id="cb8-94"><a href="#cb8-94" tabindex="-1"></a><span class="co">#&gt; Deviance = 119221</span></span>
+<span id="cb8-95"><a href="#cb8-95" tabindex="-1"></a><span class="co">#&gt; Residual deviance = 119915</span></span>
+<span id="cb8-96"><a href="#cb8-96" tabindex="-1"></a><span class="co">#&gt; Deviance Information Criterion (DIC) = 119302</span></span></code></pre></div>
 <p>Mean class effects are given in the output as <code>D.2</code>
 parameters. These can be interpreted as the relative effect of each
 class versus the <code>Plac</code> (Placebo), for the 2nd spline
@@ -1024,7 +1025,7 @@ parameters controlling the spline for Aclidinium at later follow-up:</p>
 <span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>  ))</span>
 <span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a></span>
 <span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co"># Using the COPD dataset with a B-spline MBNMA</span></span>
-<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>mbnma <span class="ot">&lt;-</span> <span class="fu">mb.run</span>(network.copd, <span class="at">fun=</span><span class="fu">tspline</span>(<span class="at">degree=</span><span class="dv">2</span>, <span class="at">knots=</span><span class="fu">c</span>(<span class="fl">0.1</span>,<span class="fl">0.5</span>)),</span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>mbnma <span class="ot">&lt;-</span> <span class="fu">mb.run</span>(network.copd, <span class="at">fun=</span><span class="fu">tspline</span>(<span class="at">degree=</span><span class="dv">2</span>, <span class="at">knots=</span><span class="fu">c</span>(<span class="dv">5</span>,<span class="dv">26</span>)),</span>
 <span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a>                <span class="at">priors=</span>spline.priors)</span></code></pre></div>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="co"># Predict and plot time-course relative effect</span></span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>pred <span class="ot">&lt;-</span> <span class="fu">predict</span>(mbnma)</span>
@@ -1032,40 +1033,33 @@ parameters controlling the spline for Aclidinium at later follow-up:</p>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt; Success: Elements in prior match consistency time-course treatment effect parameters</span></span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="fu">plot</span>(pred)</span>
 <span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="co">#&gt; Reference treatment in plots is Placebo</span></span></code></pre></div>
-<p><img src="data:image/png;base64,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" /><!-- --></p>
+<p><img role="img" src="data:image/png;base64,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" /><!-- --></p>
 <p>As can be seen from the predicted time-course, using informative
 priors for Aclidinium in this way allows us to predict it’s efficacy at
 longer-term follow-up than the data alone can inform.</p>
 </div>
 <div id="pd-effective-number-of-parameters" class="section level4">
 <h4>pD (effective number of parameters)</h4>
-<p>The default value for <code>pd</code> in <code>mb.run()</code> is
-<code>pd=&quot;pv&quot;</code>, which uses the rapid approach automatically
+<p>The default value for <code>pD</code> in <code>mb.run()</code> is
+<code>pD=FALSE</code>, which uses the rapid approach automatically
 calculated in the <code>R2jags</code> package as
-<code>pv = var(deviance)/2</code>. Whilst this is easy to calculate, it
+<code>pD = var(deviance)/2</code>. Whilst this is easy to calculate, it
 is only an approximation to the effective number of parameters, and may
 be numerically unstable <span class="citation">(Gelman et al.
 2003)</span>. However, it has been shown to be reliable for model
 comparison in time-course MBNMA models in a simulation study <span class="citation">(Pedder et al. 2020)</span>.</p>
-<p>A more reliable method for estimating <code>pd</code> is
-<code>pd=&quot;pd.kl&quot;</code>, which uses the Kullback-Leibler divergence
-<span class="citation">(Plummer 2008)</span>. This is more reliable than
-the default method used in <code>R2jags</code> for calculating the
-effective number of parameters from non-linear models. The disadvantage
-of this approach is that it requires running additional MCMC iterations,
-so can be slightly slower to calculate.</p>
+<p>A more reliable method for estimating <code>pD</code> is
+<code>pD=TRUE</code>, which uses the Kullback-Leibler divergence <span class="citation">(Plummer 2008)</span>. This is more reliable than the
+default method used in <code>R2jags</code> for calculating the effective
+number of parameters from non-linear models. The disadvantage of this
+approach is that it requires running additional MCMC iterations, so can
+be slightly slower to calculate.</p>
 <p>A commonly-used approach in Bayesian models for calculating pD is the
-plug-in method (<code>pd=&quot;plugin&quot;</code>) <span class="citation">(Spiegelhalter et al. 2002)</span>. However, this can
-sometimes result in negative non-sensical values due to skewed posterior
-distributions for deviance contributions that can arise when fitting
-non-linear models.</p>
-<p>Finally, pD can also be calculated using an optimism adjustment
-(<code>pd=&quot;popt&quot;</code>) which allows for calculation of the penalized
-expected deviance <span class="citation">(Plummer 2008)</span>. This
-adjustment allows for the fact that data used to estimate the model is
-the same as that used to assess its parsimony. As for
-<code>pd=&quot;pd.kl&quot;</code>, it also requires running additional MCMC
-iterations.</p>
+plug-in method <span class="citation">(Spiegelhalter et al.
+2002)</span>. However, this can sometimes result in negative
+non-sensical values due to skewed posterior distributions for deviance
+contributions that can arise when fitting non-linear models. As such,
+this is no longer implemented within the package.</p>
 </div>
 <div id="correlation-between-time-course-parameters" class="section level4">
 <h4>Correlation between time-course parameters</h4>
@@ -1173,7 +1167,7 @@ informative priors.</p>
 </div>
 <div id="references" class="section level2 unnumbered">
 <h2 class="unnumbered">References</h2>
-<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="refs" class="references csl-bib-body hanging-indent" entry-spacing="0">
 <div id="ref-GMD2" class="csl-entry">
 Daly, C., N. J. Welton, S. Dias, S. Anwer, and A. E. Ades. 2021.
 <span>“NICE Guideline Methodology Document 2: Meta-Analysis of
